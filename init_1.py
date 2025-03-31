@@ -1,4 +1,3 @@
-
 ## Import packages
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -19,6 +18,7 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
+from tqdm import tqdm
 
 torch.manual_seed(42)
 if torch.cuda.is_available():
@@ -327,7 +327,15 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs = 200,
     model.train()
     train_loss_list = []
     test_loss_list = []
-    for epoch in range(num_epochs):
+    
+    # Add progress bar for epochs
+    epoch_progress = tqdm(range(num_epochs), desc="Training Progress", leave=True)
+    
+    for epoch in epoch_progress:
+        running_loss = 0.0
+        batch_count = 0
+        
+        # Process batches
         for x_lag1, x_lag5, x_lag22, y in dataloader_train:
             x_lag1 = x_lag1.to(device)
             x_lag5 = x_lag5.to(device)
@@ -343,9 +351,26 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs = 200,
             
             # Update scheduler: this scheduler is designed to be updated after each batch.
             scheduler.step()
+            
+            # Track running loss
+            running_loss += loss.item()
+            batch_count += 1
+        
+        # Calculate average loss for the epoch
+        avg_train_loss = running_loss / batch_count if batch_count > 0 else 0
+        train_loss_list.append(avg_train_loss)
         
         # Evaluate model
         valid_loss = evaluate_model(model, dataloader_test)
+        test_loss_list.append(valid_loss)
+        
+        # Update progress bar description with metrics
+        epoch_progress.set_postfix({
+            'Train Loss': f'{avg_train_loss:.4f}', 
+            'Valid Loss': f'{valid_loss:.4f}',
+            'Best': f'{best_loss_val:.4f}',
+            'Patience': patience,
+        })
 
         if valid_loss < best_loss_val:
             best_loss_val = valid_loss
@@ -353,13 +378,20 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs = 200,
             final_conv1d_lag22_weights = conv1d_lag22_weights.detach().cpu().numpy()
             patience = 0
             save_model(f'GSPHAR_24_magnet_dynamic_h{h}', model, None, best_loss_val)
+            # epoch_progress.set_postfix({**epoch_progress.postfix, 'Status': 'Saved ✓'})
+            epoch_progress.set_postfix(
+                Train_Loss=f'{avg_train_loss:.4f}', 
+                Valid_Loss=f'{valid_loss:.4f}',
+                Best=f'{best_loss_val:.4f}',
+                Patience=patience,
+                Status='Saved ✓'
+            )
         else:
             patience = patience + 1
             if patience >= 200:
-                print(f'early stopping at epoch {epoch+1}.')
+                epoch_progress.set_description(f"Early stopping at epoch {epoch+1}")
                 break
-            else:
-                pass
+    
     return best_loss_val, final_conv1d_lag5_weights, final_conv1d_lag22_weights
 
 
@@ -385,7 +417,7 @@ def evaluate_model(model, dataloader_test):
 
 
 h = 5
-data = pd.read_csv('rv5_sqrt_24.csv', index_col = 0)*100
+data = pd.read_csv('data/rv5_sqrt_24.csv', index_col = 0)*100
 date_list = data.index.tolist()
 train_end_idx = int(len(date_list)*0.7)
 train_dataset = data.iloc[0:train_end_idx,:]
@@ -517,7 +549,8 @@ dataloader_test = DataLoader(dataset_test, batch_size=32, shuffle=False)
 input_dim = 3
 output_dim = 1
 filter_size = 24
-num_epochs = 500
+# num_epochs = 500
+num_epochs = 1
 lr = 0.01
 
 GSPHAR_RV = GSPHAR(input_dim,output_dim, filter_size, DY_adj)
