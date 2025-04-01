@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 
 def save_model(name, model, num_L=None, best_loss_val=None):
-    if not os.path.exists('models/'):
-        os.makedirs('models/')
+    if not os.path.exists('checkpoints/'):
+        os.makedirs('checkpoints/')
     # Prepare the model state dictionary
     config = {
         'model_state_dict': model.state_dict(),
@@ -15,11 +15,11 @@ def save_model(name, model, num_L=None, best_loss_val=None):
         'loss': best_loss_val
     }
     # Save the model state dictionary
-    torch.save(config, f'models/{name}.tar')
+    torch.save(config, f'checkpoints/{name}.tar')
     return
 
 def load_model(name, model):
-    checkpoint = torch.load(f'models/{name}.tar', map_location='cpu')
+    checkpoint = torch.load(f'checkpoints/{name}.tar', map_location='cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
     num_L = checkpoint['layer']
     mae_loss = checkpoint['loss']
@@ -50,13 +50,13 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
         batch_count = 0
         
         # Process batches
-        for x_lag1, x_lag5, x_lag22, y in dataloader_train:
+        for x_lag1, x_lag4, x_lag24, y in dataloader_train:
             x_lag1 = x_lag1.to(device)
-            x_lag5 = x_lag5.to(device)
-            x_lag22 = x_lag22.to(device)
+            x_lag4 = x_lag4.to(device)
+            x_lag24 = x_lag24.to(device)
             y = y.to(device)
             optimizer.zero_grad()
-            output, conv1d_lag5_weights, conv1d_lag22_weights = model(x_lag1, x_lag5, x_lag22)
+            output, conv1d_lag4_weights, conv1d_lag24_weights = model(x_lag1, x_lag4, x_lag24)
             loss = criterion(output, y)
             loss.backward()
             
@@ -88,8 +88,8 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
 
         if valid_loss < best_loss_val:
             best_loss_val = valid_loss
-            final_conv1d_lag5_weights = conv1d_lag5_weights.detach().cpu().numpy()
-            final_conv1d_lag22_weights = conv1d_lag22_weights.detach().cpu().numpy()
+            final_conv1d_lag4_weights = conv1d_lag4_weights.detach().cpu().numpy()
+            final_conv1d_lag24_weights = conv1d_lag24_weights.detach().cpu().numpy()
             patience = 0
             save_model(f'GSPHAR_24_magnet_dynamic_h{h}', model, None, best_loss_val)
             # epoch_progress.set_postfix({**epoch_progress.postfix, 'Status': 'Saved ✓'})
@@ -106,7 +106,7 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
                 epoch_progress.set_description(f"Early stopping at epoch {epoch+1}")
                 break
     
-    return best_loss_val, final_conv1d_lag5_weights, final_conv1d_lag22_weights
+    return best_loss_val, final_conv1d_lag4_weights, final_conv1d_lag24_weights
 
 def evaluate_model(model, dataloader_test):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -116,12 +116,12 @@ def evaluate_model(model, dataloader_test):
     valid_loss = 0
     model.eval()
     with torch.no_grad():
-        for x_lag1, x_lag5, x_lag22, y in dataloader_test:
+        for x_lag1, x_lag4, x_lag24, y in dataloader_test:
             x_lag1 = x_lag1.to(device)
-            x_lag5 = x_lag5.to(device)
-            x_lag22 = x_lag22.to(device)
+            x_lag4 = x_lag4.to(device)
+            x_lag24 = x_lag24.to(device)
             y = y.to(device)
-            output, _, _ = model(x_lag1, x_lag5, x_lag22)
+            output, _, _ = model(x_lag1, x_lag4, x_lag24)
             loss = criterion(output, y)
             valid_loss = valid_loss + loss.item()
     valid_loss = valid_loss/len(dataloader_test)
@@ -134,8 +134,8 @@ def predict_and_evaluate(model, dataloader_test, market_indices_list):
     
     model.eval()
     with torch.no_grad():
-        for x_lag1, x_lag5, x_lag22, y in dataloader_test:
-            y_hat, _, _ = model(x_lag1, x_lag5, x_lag22)
+        for x_lag1, x_lag4, x_lag24, y in dataloader_test:
+            y_hat, _, _ = model(x_lag1, x_lag4, x_lag24)
             y_hat_list.append(y_hat.cpu().numpy())
             y_list.append(y.cpu().numpy())
     

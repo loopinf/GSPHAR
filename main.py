@@ -1,3 +1,4 @@
+import argparse
 import torch
 from torch.utils.data import DataLoader
 import pandas as pd
@@ -12,6 +13,11 @@ from data_utils import (load_and_split_data, compute_spillover_index,
 from model import GSPHAR, GSPHAR_Dataset
 from train_utils import train_eval_model, load_model, predict_and_evaluate
 
+# Parse command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--data_path', type=str, default='data/sample_1h_rv5_sqrt_38.csv', help='Path to the input data file')
+args = parser.parse_args()
+
 # Set random seeds for reproducibility
 torch.manual_seed(42)
 if torch.cuda.is_available():
@@ -20,13 +26,13 @@ if torch.cuda.is_available():
 
 def main():
     # Configuration
-    h = 5  # forecasting horizon
-    data_path = 'data/rv5_sqrt_24.csv'
+    h = 1  # forecasting horizon
+    data_path = args.data_path
     look_back_window = 24  # 24 hours
     input_dim = 3
     output_dim = 1
-    filter_size = 24
-    num_epochs = 1  # Set to 500 for full training
+    filter_size = 38 
+    num_epochs = 1 # Set to 500 for full training
     lr = 0.01
     batch_size = 32
     
@@ -53,7 +59,7 @@ def main():
     
     # Create and train model
     model = GSPHAR(input_dim, output_dim, filter_size, DY_adj)
-    valid_loss, final_conv1d_lag5_weights, final_conv1d_lag22_weights = train_eval_model(
+    valid_loss, final_conv1d_lag4_weights, final_conv1d_lag24_weights = train_eval_model(
         model, dataloader_train, dataloader_test, num_epochs, lr, h)
     
     # Load best model
