@@ -10,12 +10,12 @@ class GSPHAR(nn.Module):
         super(GSPHAR, self).__init__()
         self.A = torch.from_numpy(A)
         self.filter_size = filter_size
-        self.conv1d_lag5 = nn.Conv1d(in_channels=filter_size, out_channels=filter_size, 
-                                    kernel_size=5, groups=filter_size, bias=False)
-        nn.init.constant_(self.conv1d_lag5.weight, 1.0 / 5)
-        self.conv1d_lag22 = nn.Conv1d(in_channels=filter_size, out_channels=filter_size, 
-                                     kernel_size=22, groups=filter_size, bias=False)
-        nn.init.constant_(self.conv1d_lag22.weight, 1.0 / 22)
+        self.conv1d_lag4 = nn.Conv1d(in_channels=filter_size, out_channels=filter_size, 
+                                    kernel_size=4, groups=filter_size, bias=False)
+        nn.init.constant_(self.conv1d_lag4.weight, 1.0 / 4)
+        self.conv1d_lag24 = nn.Conv1d(in_channels=filter_size, out_channels=filter_size, 
+                                     kernel_size=24, groups=filter_size, bias=False)
+        nn.init.constant_(self.conv1d_lag24.weight, 1.0 / 24)
         self.spatial_process = nn.Sequential(
             nn.Linear(2, 2 * 8),
             nn.ReLU(),
@@ -106,52 +106,52 @@ class GSPHAR(nn.Module):
             U = torch.stack(U_list)
             return U_dega, U 
         
-    def forward(self, x_lag1, x_lag5, x_lag22):
+    def forward(self, x_lag1, x_lag4, x_lag24):
         # Ensure all items are on the same device as the input x
         device = x_lag1.device
         A = self.A.to(device)
-        self.conv1d_lag5 = self.conv1d_lag5.to(device)
-        self.conv1d_lag22 = self.conv1d_lag22.to(device)
+        self.conv1d_lag4 = self.conv1d_lag4.to(device)
+        self.conv1d_lag24 = self.conv1d_lag24.to(device)
         self.spatial_process = self.spatial_process.to(device)
         self.linear_output_real = self.linear_output.to(device)
         self.linear_output_imag = self.linear_output.to(device)
         
         # Compute dynamic adj_mx
-        U_dega, U = self.dynamic_magnet_Laplacian(A,x_lag5, x_lag22)
+        U_dega, U = self.dynamic_magnet_Laplacian(A,x_lag4, x_lag24)
         U_dega = U_dega.to(device)
         U = U.to(device)
     
         # Convert RV to complex domain
         x_lag1 = torch.complex(x_lag1, torch.zeros_like(x_lag1))
-        x_lag5 = torch.complex(x_lag5, torch.zeros_like(x_lag5))
-        x_lag22 = torch.complex(x_lag22, torch.zeros_like(x_lag22))
+        x_lag4 = torch.complex(x_lag4, torch.zeros_like(x_lag4))
+        x_lag24 = torch.complex(x_lag24, torch.zeros_like(x_lag24))
 
-        # Spectral domain operations on lag-5
-        x_lag5 = torch.matmul(U_dega, x_lag5)
-        exp_param_5 = torch.exp(self.conv1d_lag5.weight)
-        sum_exp_param_5 = torch.sum(exp_param_5, dim=-1, keepdim=True)
-        softmax_param_5 = exp_param_5/sum_exp_param_5
-        x_lag5_real = F.conv1d(input=x_lag5.real, weight=softmax_param_5, bias=None, groups=self.filter_size)
-        x_lag5_imag = F.conv1d(input=x_lag5.imag, weight=softmax_param_5, bias=None, groups=self.filter_size)
-        x_lag5 = torch.complex(x_lag5_real, x_lag5_imag)
-        x_lag5 = x_lag5.squeeze(-1)
+        # Spectral domain operations on lag-4
+        x_lag4 = torch.matmul(U_dega, x_lag4)
+        exp_param_4 = torch.exp(self.conv1d_lag4.weight)
+        sum_exp_param_4 = torch.sum(exp_param_4, dim=-1, keepdim=True)
+        softmax_param_4 = exp_param_4/sum_exp_param_4
+        x_lag4_real = F.conv1d(input=x_lag4.real, weight=softmax_param_4, bias=None, groups=self.filter_size)
+        x_lag4_imag = F.conv1d(input=x_lag4.imag, weight=softmax_param_4, bias=None, groups=self.filter_size)
+        x_lag4 = torch.complex(x_lag4_real, x_lag4_imag)
+        x_lag4 = x_lag4.squeeze(-1)
 
-        # Spectral domain operations on lag-22
-        x_lag22 = torch.matmul(U_dega, x_lag22)
-        exp_param_22 = torch.exp(self.conv1d_lag22.weight)
-        sum_exp_param_22 = torch.sum(exp_param_22, dim=-1, keepdim=True)
-        softmax_param_22 = exp_param_22/sum_exp_param_22
-        x_lag22_real = F.conv1d(input=x_lag22.real, weight=softmax_param_22, bias=None, groups=self.filter_size)
-        x_lag22_imag = F.conv1d(input=x_lag22.imag, weight=softmax_param_22, bias=None, groups=self.filter_size)
-        x_lag22 = torch.complex(x_lag22_real, x_lag22_imag)
-        x_lag22 = x_lag22.squeeze(-1)
+        # Spectral domain operations on lag-24
+        x_lag24 = torch.matmul(U_dega, x_lag24)
+        exp_param_24 = torch.exp(self.conv1d_lag24.weight)
+        sum_exp_param_24 = torch.sum(exp_param_24, dim=-1, keepdim=True)
+        softmax_param_24 = exp_param_24/sum_exp_param_24
+        x_lag24_real = F.conv1d(input=x_lag24.real, weight=softmax_param_24, bias=None, groups=self.filter_size)
+        x_lag24_imag = F.conv1d(input=x_lag24.imag, weight=softmax_param_24, bias=None, groups=self.filter_size)
+        x_lag24 = torch.complex(x_lag24_real, x_lag24_imag)
+        x_lag24 = x_lag24.squeeze(-1)
 
         # Lag-1 processing
         x_lag1 = torch.matmul(U_dega, x_lag1.unsqueeze(-1))
         x_lag1 = x_lag1.squeeze(-1)
 
         # Combine lagged responses in the spectral domain
-        lagged_rv_spectral = torch.stack((x_lag1, x_lag5, x_lag22), dim=-1)
+        lagged_rv_spectral = torch.stack((x_lag1, x_lag4, x_lag24), dim=-1)
         
         # Apply linear transformation separately to the real and imaginary parts
         y_hat_real = self.linear_output_real(lagged_rv_spectral.real)
@@ -171,7 +171,7 @@ class GSPHAR(nn.Module):
         # Apply linear transformation separately to the real and imaginary parts
         y_hat = self.spatial_process(y_hat_spatial)
         
-        return y_hat.squeeze(-1), softmax_param_5, softmax_param_22
+        return y_hat.squeeze(-1), softmax_param_4, softmax_param_24
 
 
 class GSPHAR_Dataset(Dataset):
@@ -186,11 +186,11 @@ class GSPHAR_Dataset(Dataset):
         dfs_dict = self.dict[date]
         y = dfs_dict['y'].values
         x_lag1 = dfs_dict['x_lag1'].values
-        x_lag5 = dfs_dict['x_lag5'].values
-        x_lag22 = dfs_dict['x_lag22'].values
+        x_lag4 = dfs_dict['x_lag4'].values
+        x_lag24 = dfs_dict['x_lag24'].values
         
         y_tensor = torch.tensor(y, dtype=torch.float32)
         x_lag1_tensor = torch.tensor(x_lag1, dtype=torch.float32)
-        x_lag5_tensor = torch.tensor(x_lag5, dtype=torch.float32)
-        x_lag22_tensor = torch.tensor(x_lag22, dtype=torch.float32)
-        return x_lag1_tensor, x_lag5_tensor, x_lag22_tensor, y_tensor
+        x_lag4_tensor = torch.tensor(x_lag4, dtype=torch.float32)
+        x_lag24_tensor = torch.tensor(x_lag24, dtype=torch.float32)
+        return x_lag1_tensor, x_lag4_tensor, x_lag24_tensor, y_tensor

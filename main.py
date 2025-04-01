@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 import pandas as pd
 import numpy as np
 import warnings
+import os
 warnings.filterwarnings('ignore')
 
 # Import project modules
@@ -21,7 +22,7 @@ def main():
     # Configuration
     h = 5  # forecasting horizon
     data_path = 'data/rv5_sqrt_24.csv'
-    look_back_window = 22
+    look_back_window = 24  # 24 hours
     input_dim = 3
     output_dim = 1
     filter_size = 24
@@ -62,6 +63,10 @@ def main():
     # Predict and evaluate
     results_df, rv_hat, rv_true = predict_and_evaluate(
         trained_model, dataloader_test, market_indices_list)
+    
+    # Ensure the results directory exists
+    if not os.path.exists('results/'):
+        os.makedirs('results/')
     
     # Save results
     results_df.to_csv(f'results/predictions_h{h}.csv')
