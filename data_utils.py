@@ -3,6 +3,7 @@ import numpy as np
 from scipy.sparse import linalg
 from statsmodels.tsa.api import VAR
 from scipy import stats
+from tqdm import tqdm
 
 def compute_spillover_index(data, horizon, lag, scarcity_prop, standardized=True):
     """
@@ -95,8 +96,12 @@ def prepare_lagged_features(train_dataset, test_dataset, look_back_window, h):
     """Create lagged features for training and testing datasets"""
     market_indices_list = train_dataset.columns.tolist()
     
+    # Create progress bar for market indices
+    progress_bar = tqdm(market_indices_list, desc="Creating lagged features", leave=True)
+    
     # Create lagged features
-    for market_index in market_indices_list:
+    for market_index in progress_bar:
+        progress_bar.set_postfix({'Market': market_index})
         for lag in range(look_back_window):
             train_dataset[market_index + f'_{lag+1}'] = train_dataset[market_index].shift(lag+h)
             test_dataset[market_index + f'_{lag+1}'] = test_dataset[market_index].shift(lag+h)
@@ -109,43 +114,67 @@ def prepare_lagged_features(train_dataset, test_dataset, look_back_window, h):
 
 def create_model_input_dicts(train_dataset, test_dataset, market_indices_list):
     """Create dictionary of model inputs for training and testing"""
-    # Identify column types
-    columns_lag1 = [x for x in train_dataset.columns.tolist() if x[-2:] == '_1']
-    columns_lag4 = [x for x in train_dataset.columns.tolist() if (x[-2]=='_') and (float(x[-1]) in range(1,5))]
-    columns_lag24 = [x for x in train_dataset.columns.tolist() if '_' in x]
-    x_columns = columns_lag1 + columns_lag4 + columns_lag24
-    y_columns = [x for x in train_dataset.columns.tolist() if x not in x_columns]
-    
-    # Define output order
-    row_index_order = market_indices_list
-    column_index_order_4 = [f'lag_{i}' for i in range(1,5)]
-    column_index_order_24 = [f'lag_{i}' for i in range(1,25)]
-    
-    # Process training data
     train_dict = {}
-    for date in train_dataset.index:
-        train_dict[date] = process_single_date(train_dataset, date, y_columns, columns_lag1, columns_lag4, 
-                                              columns_lag24, row_index_order, column_index_order_4, column_index_order_24)
-    
-    # Process testing data
     test_dict = {}
-    for date in test_dataset.index:
-        test_dict[date] = process_single_date(test_dataset, date, y_columns, columns_lag1, columns_lag4, 
-                                             columns_lag24, row_index_order, column_index_order_4, column_index_order_24)
+    y_columns = market_indices_list
+    
+    # Get all dates
+    train_dates = train_dataset.index
+    test_dates = test_dataset.index
+    
+    # Create nested progress bars
+    with tqdm(total=len(train_dates) + len(test_dates), desc="Overall Progress", position=0) as pbar:
+        # Process training data
+        train_progress = tqdm(train_dates, 
+                            desc="Training data", 
+                            position=1, 
+                            leave=False)
+        
+        for date in train_progress:
+            train_dict[date] = process_single_date(train_dataset, date, market_indices_list)
+            train_progress.set_postfix({
+                'Date': date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else date,
+                'Markets': len(market_indices_list)
+            })
+            pbar.update(1)
+        
+        # Process test data
+        test_progress = tqdm(test_dates, 
+                           desc="Test data  ", 
+                           position=1, 
+                           leave=False)
+        
+        for date in test_progress:
+            test_dict[date] = process_single_date(test_dataset, date, market_indices_list)
+            test_progress.set_postfix({
+                'Date': date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else date,
+                'Markets': len(market_indices_list)
+            })
+            pbar.update(1)
     
     return train_dict, test_dict, y_columns
 
-def process_single_date(dataset, date, y_columns, columns_lag1, columns_lag4, columns_lag24, 
-                       row_index_order, column_index_order_4, column_index_order_24):
+def process_single_date(dataset, date, market_indices_list):
     """Process data for a single date"""
-    y = dataset.loc[date, y_columns]
+    # Prepare column names for different lags
+    columns_lag1 = [f"{market}_1" for market in market_indices_list]
+    columns_lag4 = [f"{market}_{i}" for market in market_indices_list for i in range(1, 5)]
+    columns_lag24 = [f"{market}_{i}" for market in market_indices_list for i in range(1, 25)]
+    
+    # Create consistent index orders
+    row_index_order = market_indices_list
+    column_index_order_4 = [f"lag_{i}" for i in range(1, 5)]
+    column_index_order_24 = [f"lag_{i}" for i in range(1, 25)]
+    
+    # Process target variables with progress tracking
+    y = dataset.loc[date, market_indices_list]
     
     # Process lag-1 data
     x_lag1 = dataset.loc[date, columns_lag1]
     new_index = [ind[:-2] for ind in x_lag1.index.tolist()]
     x_lag1.index = new_index
     
-    # Process lag-4 data
+    # Process lag-4 data with DataFrame operations
     x_lag4 = dataset.loc[date, columns_lag4]
     data_lag4 = {
         'Market': [index.split('_')[0] for index in x_lag4.index],
@@ -154,7 +183,7 @@ def process_single_date(dataset, date, y_columns, columns_lag1, columns_lag4, co
     }
     df_lag4 = pd.DataFrame(data_lag4).pivot(index='Market', columns='Lag', values='Value')
     
-    # Process lag-24 data
+    # Process lag-24 data with DataFrame operations
     x_lag24 = dataset.loc[date, columns_lag24]
     data_lag24 = {
         'Market': [index.split('_')[0] for index in x_lag24.index],
@@ -163,12 +192,10 @@ def process_single_date(dataset, date, y_columns, columns_lag1, columns_lag4, co
     }
     df_lag24 = pd.DataFrame(data_lag24).pivot(index='Market', columns='Lag', values='Value')
     
-    # Reindex to ensure consistent order
+    # Ensure consistent ordering
     x_lag1 = x_lag1.reindex(row_index_order)
-    df_lag4 = df_lag4.reindex(row_index_order)
-    df_lag24 = df_lag24.reindex(row_index_order)
-    df_lag4 = df_lag4[column_index_order_4]
-    df_lag24 = df_lag24[column_index_order_24]
+    df_lag4 = df_lag4.reindex(row_index_order)[column_index_order_4]
+    df_lag24 = df_lag24.reindex(row_index_order)[column_index_order_24]
     
     return {
         'y': y,

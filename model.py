@@ -6,15 +6,28 @@ import numpy as np
 from scipy.linalg import sqrtm, eig
 
 class GSPHAR(nn.Module):
-    def __init__(self, input_dim, output_dim, filter_size, A):
+    def __init__(self, input_dim, output_dim, n_nodes, A):
+        """
+        Initialize GSPHAR model
+        Args:
+            input_dim: Input dimension
+            output_dim: Output dimension
+            n_nodes: Number of nodes in the network (number of assets)
+            A: Adjacency matrix (should be n_nodes x n_nodes)
+        """
         super(GSPHAR, self).__init__()
+        
+        # Validate input dimensions
+        if A.shape != (n_nodes, n_nodes):
+            raise ValueError(f"Adjacency matrix shape {A.shape} does not match n_nodes {n_nodes}")
+            
         self.A = torch.from_numpy(A)
-        self.filter_size = filter_size
-        self.conv1d_lag4 = nn.Conv1d(in_channels=filter_size, out_channels=filter_size, 
-                                    kernel_size=4, groups=filter_size, bias=False)
+        self.n_nodes = n_nodes
+        self.conv1d_lag4 = nn.Conv1d(in_channels=n_nodes, out_channels=n_nodes, 
+                                    kernel_size=4, groups=n_nodes, bias=False)
         nn.init.constant_(self.conv1d_lag4.weight, 1.0 / 4)
-        self.conv1d_lag24 = nn.Conv1d(in_channels=filter_size, out_channels=filter_size, 
-                                     kernel_size=24, groups=filter_size, bias=False)
+        self.conv1d_lag24 = nn.Conv1d(in_channels=n_nodes, out_channels=n_nodes, 
+                                     kernel_size=24, groups=n_nodes, bias=False)
         nn.init.constant_(self.conv1d_lag24.weight, 1.0 / 24)
         self.spatial_process = nn.Sequential(
             nn.Linear(2, 2 * 8),
@@ -131,8 +144,8 @@ class GSPHAR(nn.Module):
         exp_param_4 = torch.exp(self.conv1d_lag4.weight)
         sum_exp_param_4 = torch.sum(exp_param_4, dim=-1, keepdim=True)
         softmax_param_4 = exp_param_4/sum_exp_param_4
-        x_lag4_real = F.conv1d(input=x_lag4.real, weight=softmax_param_4, bias=None, groups=self.filter_size)
-        x_lag4_imag = F.conv1d(input=x_lag4.imag, weight=softmax_param_4, bias=None, groups=self.filter_size)
+        x_lag4_real = F.conv1d(input=x_lag4.real, weight=softmax_param_4, bias=None, groups=self.n_nodes)
+        x_lag4_imag = F.conv1d(input=x_lag4.imag, weight=softmax_param_4, bias=None, groups=self.n_nodes)
         x_lag4 = torch.complex(x_lag4_real, x_lag4_imag)
         x_lag4 = x_lag4.squeeze(-1)
 
@@ -141,8 +154,8 @@ class GSPHAR(nn.Module):
         exp_param_24 = torch.exp(self.conv1d_lag24.weight)
         sum_exp_param_24 = torch.sum(exp_param_24, dim=-1, keepdim=True)
         softmax_param_24 = exp_param_24/sum_exp_param_24
-        x_lag24_real = F.conv1d(input=x_lag24.real, weight=softmax_param_24, bias=None, groups=self.filter_size)
-        x_lag24_imag = F.conv1d(input=x_lag24.imag, weight=softmax_param_24, bias=None, groups=self.filter_size)
+        x_lag24_real = F.conv1d(input=x_lag24.real, weight=softmax_param_24, bias=None, groups=self.n_nodes)
+        x_lag24_imag = F.conv1d(input=x_lag24.imag, weight=softmax_param_24, bias=None, groups=self.n_nodes)
         x_lag24 = torch.complex(x_lag24_real, x_lag24_imag)
         x_lag24 = x_lag24.squeeze(-1)
 

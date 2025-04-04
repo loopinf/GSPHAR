@@ -27,13 +27,16 @@ def load_model(name, model):
     print(f"MAE loss: {mae_loss}")
     return model, mae_loss
 
-def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, lr=0.01, h=5):
+def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, lr=0.01, h=5, progress_callback=None):
+    from tqdm import tqdm
+    
     best_loss_val = 1000000
     patience = 0
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, 
-                                                   steps_per_epoch=len(dataloader_train), epochs=num_epochs,
+                                                   steps_per_epoch=len(dataloader_train), 
+                                                   epochs=num_epochs,
                                                    three_phase=True)
     model.to(device)
     criterion = nn.MSELoss()
@@ -41,34 +44,39 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
     model.train()
     train_loss_list = []
     test_loss_list = []
-    
-    # Add progress bar for epochs
+
+    # Main training loop with progress bar for epochs
     epoch_progress = tqdm(range(num_epochs), desc="Training Progress", leave=True)
-    
     for epoch in epoch_progress:
         running_loss = 0.0
         batch_count = 0
         
-        # Process batches
-        for x_lag1, x_lag4, x_lag24, y in dataloader_train:
-            x_lag1 = x_lag1.to(device)
-            x_lag4 = x_lag4.to(device)
-            x_lag24 = x_lag24.to(device)
-            y = y.to(device)
+        # Add progress bar for batches
+        batch_progress = tqdm(dataloader_train, 
+                            desc=f"Epoch {epoch+1}/{num_epochs}", 
+                            leave=False)
+        
+        for batch_idx, batch in enumerate(batch_progress):
             optimizer.zero_grad()
-            output, conv1d_lag4_weights, conv1d_lag24_weights = model(x_lag1, x_lag4, x_lag24)
-            loss = criterion(output, y)
+            
+            # Forward pass
+            outputs = model(batch)
+            loss = criterion(outputs, batch['y'].to(device))
+            
+            # Backward pass
             loss.backward()
-            
-            # Update parameters
             optimizer.step()
-            
-            # Update scheduler: this scheduler is designed to be updated after each batch.
             scheduler.step()
             
-            # Track running loss
+            # Update metrics
             running_loss += loss.item()
             batch_count += 1
+            
+            # Update batch progress bar
+            batch_progress.set_postfix({
+                'loss': f'{loss.item():.4f}',
+                'avg_loss': f'{running_loss/batch_count:.4f}'
+            })
         
         # Calculate average loss for the epoch
         avg_train_loss = running_loss / batch_count if batch_count > 0 else 0
@@ -78,23 +86,22 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
         valid_loss = evaluate_model(model, dataloader_test)
         test_loss_list.append(valid_loss)
         
-        # Update progress bar description with metrics
+        # Update epoch progress bar
         epoch_progress.set_postfix({
-            'Train Loss': f'{avg_train_loss:.4f}', 
+            'Train Loss': f'{avg_train_loss:.4f}',
             'Valid Loss': f'{valid_loss:.4f}',
             'Best': f'{best_loss_val:.4f}',
-            'Patience': patience,
+            'Patience': patience
         })
-
+        
         if valid_loss < best_loss_val:
             best_loss_val = valid_loss
             final_conv1d_lag4_weights = conv1d_lag4_weights.detach().cpu().numpy()
             final_conv1d_lag24_weights = conv1d_lag24_weights.detach().cpu().numpy()
             patience = 0
             save_model(f'GSPHAR_24_magnet_dynamic_h{h}', model, None, best_loss_val)
-            # epoch_progress.set_postfix({**epoch_progress.postfix, 'Status': 'Saved ✓'})
             epoch_progress.set_postfix(
-                Train_Loss=f'{avg_train_loss:.4f}', 
+                Train_Loss=f'{avg_train_loss:.4f}',
                 Valid_Loss=f'{valid_loss:.4f}',
                 Best=f'{best_loss_val:.4f}',
                 Patience=patience,
@@ -105,6 +112,10 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
             if patience >= 200:
                 epoch_progress.set_description(f"Early stopping at epoch {epoch+1}")
                 break
+        
+        # Call progress callback if provided
+        if progress_callback:
+            progress_callback()
     
     return best_loss_val, final_conv1d_lag4_weights, final_conv1d_lag24_weights
 

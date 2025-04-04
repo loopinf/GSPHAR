@@ -15,7 +15,10 @@ from train_utils import train_eval_model, load_model, predict_and_evaluate
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_path', type=str, default='data/sample_1h_rv5_sqrt_38.csv', help='Path to the input data file')
+parser.add_argument('--data_path', type=str, default='data/sample_1h_rv5_sqrt_38.csv', 
+                    help='Path to the input data file')
+parser.add_argument('--n_symbols', type=int, default=38,
+                    help='Number of symbols/assets to process')
 args = parser.parse_args()
 
 # Set random seeds for reproducibility
@@ -28,10 +31,11 @@ def main():
     # Configuration
     h = 1  # forecasting horizon
     data_path = args.data_path
+    n_symbols = args.n_symbols  # Now configurable
     look_back_window = 24  # 24 hours
     input_dim = 3
     output_dim = 1
-    filter_size = 38 
+    filter_size = n_symbols  # Use n_symbols instead of hardcoded 38
     num_epochs = 1 # Set to 500 for full training
     lr = 0.01
     batch_size = 32
@@ -66,9 +70,16 @@ def main():
     model_name = f'GSPHAR_24_magnet_dynamic_h{h}'
     trained_model, mae_loss = load_model(model_name, model)
     
+    # Get test dates from the test dataset
+    test_dates = test_dataset.index
+    
     # Predict and evaluate
     results_df, rv_hat, rv_true = predict_and_evaluate(
-        trained_model, dataloader_test, market_indices_list)
+        trained_model, 
+        dataloader_test, 
+        market_indices_list,
+        # test_dates=test_dates
+    )
     
     # Ensure the results directory exists
     if not os.path.exists('results/'):
@@ -77,7 +88,10 @@ def main():
     # Save results
     results_df.to_csv(f'results/predictions_h{h}.csv')
     
-    print(f"Training and evaluation complete. Results saved to results/predictions_h{h}.csv")
+    print(f"Training and evaluation complete. Results saved to:")
+    print(f"- results/predictions_h{h}.csv (both predictions and true values)")
+    print(f"- results/predictions_only_h{h}.csv (only predictions)")
+    print(f"- results/true_values_h{h}.csv (only true values)")
     print(f"MAE loss: {mae_loss}")
     
     return results_df, rv_hat, rv_true, mae_loss
