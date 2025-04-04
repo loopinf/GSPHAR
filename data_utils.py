@@ -126,7 +126,7 @@ def create_model_input_dicts(train_dataset, test_dataset, market_indices_list):
     with tqdm(total=len(train_dates) + len(test_dates), desc="Overall Progress", position=0) as pbar:
         # Process training data
         train_progress = tqdm(train_dates, 
-                            desc="Training data", 
+                            desc="making train_dict", 
                             position=1, 
                             leave=False)
         

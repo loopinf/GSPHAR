@@ -27,6 +27,36 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed(42)
     torch.cuda.manual_seed_all(42)
 
+def save_dataloader(dataloader, cache_path):
+    """Save DataLoader's dataset to disk"""
+    if not os.path.exists('cache/'):
+        os.makedirs('cache/')
+    
+    # Extract the dataset from DataLoader
+    dataset = dataloader.dataset
+    
+    # Save using torch.save
+    torch.save({
+        'dataset': dataset,
+        'batch_size': dataloader.batch_size,
+        # 'shuffle': dataloader.shuffle,
+        'num_workers': dataloader.num_workers if hasattr(dataloader, 'num_workers') else 0
+    }, cache_path)
+    print(f"Saved dataloader to {cache_path}")
+
+def load_dataloader(cache_path):
+    """Load cached DataLoader from disk"""
+    if os.path.exists(cache_path):
+        print(f"Loading cached dataloader from {cache_path}")
+        cache = torch.load(cache_path)
+        return DataLoader(
+            dataset=cache['dataset'],
+            batch_size=cache['batch_size'],
+            # shuffle=cache['shuffle'],
+            # num_workers=cache['num_workers']
+        )
+    return None
+
 def main():
     # Configuration
     h = 1  # forecasting horizon
@@ -55,11 +85,26 @@ def main():
     train_dict, test_dict, y_columns = create_model_input_dicts(
         train_dataset, test_dataset, market_indices_list)
     
-    # Create datasets and dataloaders
-    dataset_train = GSPHAR_Dataset(train_dict)
-    dataset_test = GSPHAR_Dataset(test_dict)
-    dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
-    dataloader_test = DataLoader(dataset_test, batch_size=batch_size, shuffle=False)
+    # Define cache paths
+    train_cache_path = f'cache/dataloader_train_h{h}_n{n_symbols}.pt'
+    test_cache_path = f'cache/dataloader_test_h{h}_n{n_symbols}.pt'
+    
+    # Try to load cached DataLoaders
+    dataloader_train = load_dataloader(train_cache_path)
+    dataloader_test = load_dataloader(test_cache_path)
+    
+    if dataloader_train is None or dataloader_test is None:
+        print("Creating new DataLoaders...")
+        # Create datasets and dataloaders
+        dataset_train = GSPHAR_Dataset(train_dict)
+        dataset_test = GSPHAR_Dataset(test_dict)
+        
+        dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
+        dataloader_test = DataLoader(dataset_test, batch_size=batch_size, shuffle=False)
+        
+        # Cache the DataLoaders
+        save_dataloader(dataloader_train, train_cache_path)
+        save_dataloader(dataloader_test, test_cache_path)
     
     # Create and train model
     model = GSPHAR(input_dim, output_dim, filter_size, DY_adj)

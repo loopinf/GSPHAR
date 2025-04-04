@@ -56,12 +56,18 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
                             desc=f"Epoch {epoch+1}/{num_epochs}", 
                             leave=False)
         
-        for batch_idx, batch in enumerate(batch_progress):
+        for x_lag1, x_lag4, x_lag24, y in batch_progress:
             optimizer.zero_grad()
             
+            # Move data to device
+            x_lag1 = x_lag1.to(device)
+            x_lag4 = x_lag4.to(device)
+            x_lag24 = x_lag24.to(device)
+            y = y.to(device)
+            
             # Forward pass
-            outputs = model(batch)
-            loss = criterion(outputs, batch['y'].to(device))
+            outputs, _, _ = model(x_lag1, x_lag4, x_lag24)
+            loss = criterion(outputs, y)
             
             # Backward pass
             loss.backward()
@@ -96,8 +102,8 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
         
         if valid_loss < best_loss_val:
             best_loss_val = valid_loss
-            final_conv1d_lag4_weights = conv1d_lag4_weights.detach().cpu().numpy()
-            final_conv1d_lag24_weights = conv1d_lag24_weights.detach().cpu().numpy()
+            final_conv1d_lag4_weights = model.conv1d_lag4.weight.detach().cpu().numpy()
+            final_conv1d_lag24_weights = model.conv1d_lag24.weight.detach().cpu().numpy()
             patience = 0
             save_model(f'GSPHAR_24_magnet_dynamic_h{h}', model, None, best_loss_val)
             epoch_progress.set_postfix(
