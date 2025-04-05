@@ -37,7 +37,9 @@ class GSPHAR(nn.Module):
             nn.Linear(2 * 8, 1),
             nn.ReLU()
         )
-        self.linear_output = nn.Linear(input_dim, output_dim, bias=True)
+        # Replace single linear_output with separate real and imaginary components
+        self.linear_output_real = nn.Linear(input_dim, output_dim, bias=True)
+        self.linear_output_imag = nn.Linear(input_dim, output_dim, bias=True)
     
     def nomalized_magnet_laplacian(self, A, q, norm=True):
         A_s = (A + A.T)/2
@@ -126,8 +128,8 @@ class GSPHAR(nn.Module):
         self.conv1d_lag4 = self.conv1d_lag4.to(device)
         self.conv1d_lag24 = self.conv1d_lag24.to(device)
         self.spatial_process = self.spatial_process.to(device)
-        self.linear_output_real = self.linear_output.to(device)
-        self.linear_output_imag = self.linear_output.to(device)
+        self.linear_output_real = self.linear_output_real.to(device)
+        self.linear_output_imag = self.linear_output_imag.to(device)
         
         # Compute dynamic adj_mx
         U_dega, U = self.dynamic_magnet_Laplacian(A,x_lag4, x_lag24)

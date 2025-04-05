@@ -144,14 +144,28 @@ def evaluate_model(model, dataloader_test):
     valid_loss = valid_loss/len(dataloader_test)
     return valid_loss
 
-def predict_and_evaluate(model, dataloader_test, market_indices_list):
-    """Generate predictions and evaluation metrics"""
+def predict_and_evaluate(model, dataloader_test, market_indices_list, test_dates=None):
+    """Generate predictions and evaluation metrics
+    
+    Args:
+        model: The trained model
+        dataloader_test: PyTorch DataLoader for test data
+        market_indices_list: List of market indices
+        test_dates: Index timestamps for the predictions (optional)
+    """
     y_hat_list = []
     y_list = []
     
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model.to(device)
     model.eval()
+    
     with torch.no_grad():
         for x_lag1, x_lag4, x_lag24, y in dataloader_test:
+            x_lag1 = x_lag1.to(device)
+            x_lag4 = x_lag4.to(device)
+            x_lag24 = x_lag24.to(device)
+            
             y_hat, _, _ = model(x_lag1, x_lag4, x_lag24)
             y_hat_list.append(y_hat.cpu().numpy())
             y_list.append(y.cpu().numpy())
@@ -159,15 +173,29 @@ def predict_and_evaluate(model, dataloader_test, market_indices_list):
     y_hat_concatenated = np.concatenate(y_hat_list, axis=0)
     y_concatenated = np.concatenate(y_list, axis=0)
     
-    rv_hat = pd.DataFrame(data=y_hat_concatenated, columns=market_indices_list)
-    rv_true = pd.DataFrame(data=y_concatenated, columns=market_indices_list)
+    # Create DataFrames with time index if available
+    look_back_window = 24
+    if len(test_dates)  == len(y_hat_concatenated)+ look_back_window:
+        test_dates = test_dates[look_back_window:]
+    # if test_dates is not None and len(test_dates) == len(y_hat_concatenated):
+        rv_hat = pd.DataFrame(
+            data=y_hat_concatenated, 
+            columns=market_indices_list,
+            index=test_dates
+        )
+        rv_true = pd.DataFrame(
+            data=y_concatenated, 
+            columns=market_indices_list,
+            index=test_dates
+        )
+    else:
+        rv_hat = pd.DataFrame(data=y_hat_concatenated, columns=market_indices_list)
+        rv_true = pd.DataFrame(data=y_concatenated, columns=market_indices_list)
     
-    # Create results dataframe
-    results_df = pd.DataFrame()
+    # Create results DataFrame with predictions and true values
+    results_df = pd.DataFrame(index=rv_hat.index)
     for market_index in market_indices_list:
-        pred_column = market_index + '_rv_forecast'
-        true_column = market_index + '_rv_true'
-        results_df[pred_column] = rv_hat[market_index]
-        results_df[true_column] = rv_true[market_index]
+        results_df[f'{market_index}_rv_forecast'] = rv_hat[market_index]
+        results_df[f'{market_index}_rv_true'] = rv_true[market_index]
     
     return results_df, rv_hat, rv_true
