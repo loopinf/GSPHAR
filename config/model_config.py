@@ -6,7 +6,7 @@ class ModelConfig:
     look_back_window: int = 24  # 24 hours
     input_dim: int = 3
     output_dim: int = 1
-    num_epochs: int = 500
+    num_epochs: int = 2
     lr: float = 0.01
     batch_size: int = 32
     
