@@ -30,6 +30,10 @@ def setup_args() -> argparse.Namespace:
                        help='Volatility calculation method')
     parser.add_argument('--train', action='store_true',
                        help='Train new model instead of loading existing one')
+    parser.add_argument('--continue_training', action='store_true',
+                       help='Continue training existing model')
+    parser.add_argument('--epochs', type=int, default=20,
+                       help='Number of training epochs')
     return parser.parse_args()
 
 def setup_directories() -> None:
@@ -53,6 +57,8 @@ def process_raw_data(data_path: str, vol_method: str, n_symbols: int) -> pd.Data
     
     print(f"Calculating {vol_method} volatility...")
     volatility = calculate_volatility(raw_data, method=vol_method, freq='1H')
+    # multiply by 100 to convert to percentage
+    volatility = volatility * 100
     
     # Handle NaN values
     print("Handling NaN values...")
@@ -129,32 +135,91 @@ def save_results(results_df: pd.DataFrame, rv_hat: pd.DataFrame,
 
 def load_processed_data(cache_path: str) -> Tuple:
     """Load processed data from cache if it exists"""
-    if os.path.exists(cache_path):
-        print(f"Loading cached data from {cache_path}")
+    if not os.path.exists(cache_path):
+        return (None,) * 6
+    
+    print(f"Loading cached data from {cache_path}")
+    try:
+        # Try loading with torch first
         data = torch.load(cache_path)
         return data
-    return (None,) * 6  # Return 6 None values to match the expected tuple size
+    except Exception as e:
+        print(f"Error loading with torch: {str(e)}")
+        try:
+            # Try loading with pickle as fallback
+            print("Attempting to load using pickle...")
+            import pickle
+            with open(cache_path, 'rb') as f:
+                data = pickle.load(f)
+            return data
+        except Exception as e:
+            print(f"Failed to load data: {str(e)}")
+            return (None,) * 6
 
 def save_processed_data(train_dict: dict, test_dict: dict, 
                        DY_adj: np.ndarray, y_columns: list,
                        test_dates: pd.DatetimeIndex, 
                        market_indices_list: list,
                        cache_path: str) -> None:
-    """Save processed data to cache"""
+    """Save processed data to cache with error handling"""
     print(f"Saving processed data to {cache_path}")
-    data = (train_dict, test_dict, DY_adj, y_columns, 
-            test_dates, market_indices_list)
-    torch.save(data, cache_path)
+    
+    # Create directory if it doesn't exist
+    cache_dir = os.path.dirname(cache_path)
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # First save to a temporary file
+    temp_path = cache_path + '.tmp'
+    try:
+        data = (train_dict, test_dict, DY_adj, y_columns, 
+                test_dates, market_indices_list)
+        
+        # Convert numpy arrays to torch tensors if needed
+        if isinstance(DY_adj, np.ndarray):
+            DY_adj = torch.from_numpy(DY_adj)
+        
+        # Save with error handling
+        torch.save(data, temp_path)
+        
+        # If save was successful, rename temp file to final file
+        if os.path.exists(cache_path):
+            os.remove(cache_path)
+        os.rename(temp_path, cache_path)
+        print("Data saved successfully")
+        
+    except Exception as e:
+        print(f"Error saving data: {str(e)}")
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        
+        # Try alternative saving method using pickle
+        try:
+            print("Attempting to save using pickle...")
+            import pickle
+            with open(cache_path, 'wb') as f:
+                pickle.dump(data, f)
+            print("Data saved successfully using pickle")
+        except Exception as e:
+            print(f"Failed to save using pickle: {str(e)}")
+            raise
+
+def save_training_history(train_losses, valid_losses, h):
+    """Save training history to a CSV file"""
+    history_df = pd.DataFrame({
+        'epoch': range(1, len(train_losses) + 1),
+        'train_loss': train_losses,
+        'valid_loss': valid_losses
+    })
+    history_df.to_csv(f'results/training_history_h{h}.csv', index=False)
+    print(f"Training history saved to results/training_history_h{h}.csv")
 
 def main():
     # Setup
     args = setup_args()
     config = ModelConfig()
+    config.num_epochs = args.epochs  # Update config with command-line argument
     setup_directories()
     set_random_seeds()
-    
-    # Process data
-    volatility = process_raw_data(args.data_path, args.vol_method, args.n_symbols)
     
     # Define cache path
     cache_path = f'cache/processed_data_h{config.h}_n{args.n_symbols}_{args.vol_method}.pt'
@@ -162,6 +227,8 @@ def main():
     # Try to load cached data
     data = load_processed_data(cache_path)
     if data[0] is None:
+        # Process data
+        volatility = process_raw_data(args.data_path, args.vol_method, args.n_symbols)
         print("Processing data and creating input dictionaries...")
         data = prepare_model_data(volatility, config)
         save_processed_data(*data, cache_path)
@@ -178,28 +245,47 @@ def main():
     # Initialize model
     model = GSPHAR(config.input_dim, config.output_dim, args.n_symbols, DY_adj)
     
-    # Train or load model
-    if args.train:
-        print("Training new model...")
-        valid_loss, *_ = train_eval_model(
-            model, dataloader_train, dataloader_test, 
-            config.num_epochs, config.lr, config.h
+    # Train, continue training, or load model
+    if args.train and args.continue_training:
+        print("Error: Cannot specify both --train and --continue_training")
+        return
+        
+    if args.continue_training:
+        print(f"Loading existing model...")
+        model_name = f'GSPHAR_24_magnet_dynamic_h{config.h}'
+        model, previous_mae = load_model(model_name, model)
+        print(f"Previous MAE: {previous_mae}")
+        print(f"Continuing training for {args.epochs} more epochs...")
+        
+    if args.train or args.continue_training:
+        best_loss_val, train_losses, valid_losses = train_eval_model(
+            model, 
+            dataloader_train, 
+            dataloader_test, 
+            num_epochs=args.epochs,
+            lr=config.lr, 
+            h=config.h
         )
-    
-    # Load best model
-    trained_model, mae_loss = load_model(config.model_name, model)
+        print(f"Final validation loss: {best_loss_val}")
+        
+        # Save training history
+        save_training_history(train_losses, valid_losses, config.h)
+    else:
+        # Just load the model without training
+        model_name = f'GSPHAR_24_magnet_dynamic_h{config.h}'
+        model, mae = load_model(model_name, model)
     
     # Predict and evaluate
     results_df, rv_hat, rv_true = predict_and_evaluate(
-        trained_model, dataloader_test, market_indices_list,
+        model, dataloader_test, market_indices_list,
         test_dates=test_dates
     )
     
     # Save results
     save_results(results_df, rv_hat, rv_true, config.h)
-    print(f"MAE loss: {mae_loss}")
+    print(f"MAE loss: {mae}")
     
-    return results_df, rv_hat, rv_true, mae_loss
+    return results_df, rv_hat, rv_true, mae
 
 if __name__ == '__main__':
     main()
