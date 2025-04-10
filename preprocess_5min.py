@@ -27,7 +27,10 @@ def load_pickle_data(file_path):
     return data
 
 def process_data(file_path, resample_freq='1H', vol_method='realized', output_folder='data'):
-    """Process 5-minute data and save volatility as CSV"""
+    """Process 5-minute data and save volatility as CSV
+    return volatility as percentage 
+    """
+
     # Create output directory if it doesn't exist
     Path(output_folder).mkdir(parents=True, exist_ok=True)
     
@@ -43,6 +46,8 @@ def process_data(file_path, resample_freq='1H', vol_method='realized', output_fo
     # Calculate volatility
     print(f"Calculating {vol_method} volatility")
     volatility = calculate_volatility(data, method=vol_method, freq=resample_freq)
+    # multiply by 100 to convert to percentage
+    volatility = volatility * 100
     
     # Save to CSV
     output_file_path = Path(output_folder) / f'volatility_{vol_method}_{resample_freq}.csv'
