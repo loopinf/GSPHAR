@@ -1,0 +1,8 @@
+__pycache__/
+results/
+unzip_/
+data/
+backup/
+.vscode/
+cache_*/
+checkpoints/
