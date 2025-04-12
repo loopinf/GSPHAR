@@ -6,3 +6,4 @@ backup/
 .vscode/
 cache_*/
 checkpoints/
+.DS_Store
