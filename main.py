@@ -220,9 +220,13 @@ def main():
     config.num_epochs = args.epochs  # Update config with command-line argument
     setup_directories()
     set_random_seeds()
-    
+    # perpetual_futures = [ "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "LINKUSDT", "MATICUSDT", "DOTUSDT" ]
+    tmp_symbols = ['LINKUSDT', 'XRPUSDT', 'DOGEUSDT', 'ETHUSDT', 'DOTUSDT', 'BNBUSDT', 'ADAUSDT', 'BTCUSDT'] 
     # Define cache path
     cache_path = f'cache/processed_data_h{config.h}_n{args.n_symbols}_{args.vol_method}.pt'
+    cache_path_test = f'cache_small/processed_data_h{config.h}_n{args.n_symbols}_{args.vol_method}.pt'
+    SMALL = True
+    if SMALL: cache_path = cache_path_test
     
     # Try to load cached data
     data = load_processed_data(cache_path)
@@ -253,8 +257,8 @@ def main():
     if args.continue_training:
         print(f"Loading existing model...")
         model_name = f'GSPHAR_24_magnet_dynamic_h{config.h}'
-        model, previous_mae = load_model(model_name, model)
-        print(f"Previous MAE: {previous_mae}")
+        model, previous_loss = load_model(model_name, model)
+        print(f"Previous loss: {previous_loss}")
         print(f"Continuing training for {args.epochs} more epochs...")
         
     if args.train or args.continue_training:
@@ -270,10 +274,11 @@ def main():
         
         # Save training history
         save_training_history(train_losses, valid_losses, config.h)
+        loss = best_loss_val
     else:
         # Just load the model without training
         model_name = f'GSPHAR_24_magnet_dynamic_h{config.h}'
-        model, mae = load_model(model_name, model)
+        model, loss = load_model(model_name, model)
     
     # Predict and evaluate
     results_df, rv_hat, rv_true = predict_and_evaluate(
@@ -283,9 +288,9 @@ def main():
     
     # Save results
     save_results(results_df, rv_hat, rv_true, config.h)
-    print(f"MAE loss: {mae}")
+    print(f"Loss: {loss}")
     
-    return results_df, rv_hat, rv_true, mae
+    return results_df, rv_hat, rv_true, loss
 
 if __name__ == '__main__':
     main()

@@ -1,3 +1,4 @@
+#%%
 ## Import packages
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -415,7 +416,7 @@ def evaluate_model(model, dataloader_test):
     valid_loss = valid_loss/len(dataloader_test)
     return valid_loss
 
-
+#%%
 h = 5
 data = pd.read_csv('data/rv5_sqrt_24.csv', index_col = 0)*100
 date_list = data.index.tolist()
@@ -426,8 +427,8 @@ test_dataset = data.iloc[train_end_idx:,:]
 market_indices_list = train_dataset.columns.tolist()
 
 DY_adj = compute_spillover_index(train_dataset, h, 22, 0.0, standardized=True)
-
-look_back_window = 22
+#%%
+look_back_window = 24
 for market_index in market_indices_list:
     for lag in range(look_back_window):
         train_dataset[market_index + f'_{lag+1}'] = train_dataset[market_index].shift(lag+h)
@@ -550,7 +551,7 @@ input_dim = 3
 output_dim = 1
 filter_size = 24
 # num_epochs = 500
-num_epochs = 1
+num_epochs = 5
 lr = 0.01
 
 GSPHAR_RV = GSPHAR(input_dim,output_dim, filter_size, DY_adj)
@@ -583,3 +584,5 @@ for market_index in market_indices_list:
     pred_GSPHAR_dynamic_df[pred_column] = rv_hat_GSPHAR_dynamic[market_index]
     pred_GSPHAR_dynamic_df[true_column] = rv_true[market_index]
 
+
+# %%

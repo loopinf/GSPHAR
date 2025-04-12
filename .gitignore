@@ -1,0 +1,9 @@
+__pycache__/
+results/
+backup/
+.DS_Store
+.vscode/
+data/
+cache*/
+checkpoints/
+GSPHAR_/

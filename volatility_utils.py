@@ -69,8 +69,6 @@ def calculate_volatility(df, method='pct_change', freq='1H'):
         print(f'freq_df: {freq_df} into {freq}')
         # if freq_df and freq_df != '5min':
             # raise ValueError("Realized volatility requires 5-minute data")
-    
-    if method == 'realized':
         return calculate_realized_volatility(df, freq)
     elif method == 'pct_change':
         return calculate_pct_change_volatility(df, freq)

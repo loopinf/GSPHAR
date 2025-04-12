@@ -22,10 +22,10 @@ def load_model(name, model):
     checkpoint = torch.load(f'checkpoints/{name}.tar', map_location='cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
     num_L = checkpoint['layer']
-    mae_loss = checkpoint['loss']
+    loss = checkpoint['loss']
     print(f"Loaded model: {name}")
-    print(f"MAE loss: {mae_loss}")
-    return model, mae_loss
+    print(f"Loss: {loss}")
+    return model, loss
 
 def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, lr=0.01, h=5, progress_callback=None):
     from tqdm import tqdm
@@ -102,8 +102,6 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
         
         if valid_loss < best_loss_val:
             best_loss_val = valid_loss
-            final_conv1d_lag4_weights = model.conv1d_lag4.weight.detach().cpu().numpy()
-            final_conv1d_lag24_weights = model.conv1d_lag24.weight.detach().cpu().numpy()
             patience = 0
             save_model(f'GSPHAR_24_magnet_dynamic_h{h}', model, None, best_loss_val)
             epoch_progress.set_postfix(
@@ -123,12 +121,15 @@ def train_eval_model(model, dataloader_train, dataloader_test, num_epochs=200, l
         if progress_callback:
             progress_callback()
     
-    return best_loss_val, final_conv1d_lag4_weights, final_conv1d_lag24_weights
+    # Save training history
+    save_training_history(train_loss_list, test_loss_list, h)
+    
+    return best_loss_val, train_loss_list, test_loss_list
 
 def evaluate_model(model, dataloader_test):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
-    criterion = nn.L1Loss()
+    criterion = nn.MSELoss()
     criterion = criterion.to(device)
     valid_loss = 0
     model.eval()
@@ -199,3 +200,50 @@ def predict_and_evaluate(model, dataloader_test, market_indices_list, test_dates
         results_df[f'{market_index}_rv_true'] = rv_true[market_index]
     
     return results_df, rv_hat, rv_true
+
+def save_training_history(train_losses, valid_losses, h, name=None):
+    """Save training and validation losses to a file with timestamp
+    
+    Args:
+        train_losses (list): List of training losses
+        valid_losses (list): List of validation losses
+        h (int): Forecasting horizon
+        name (str, optional): Model name prefix. Defaults to 'GSPHAR'
+    """
+    from datetime import datetime
+    
+    if not os.path.exists('results/training_history/'):
+        os.makedirs('results/training_history/')
+    
+    model_name = name if name else 'GSPHAR'
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
+    history_df = pd.DataFrame({
+        'epoch': range(1, len(train_losses) + 1),
+        'train_loss': train_losses,
+        'valid_loss': valid_losses
+    })
+    
+    filename = f'results/training_history/{model_name}_h{h}_{timestamp}.csv'
+    history_df.to_csv(filename, index=False)
+    print(f"Training history saved to: {filename}")
+    
+    # Also save a reference to the latest history file
+    latest_ref = {
+        'timestamp': timestamp,
+        'filename': filename,
+        'h': h,
+        'model_name': model_name,
+        'final_train_loss': train_losses[-1],
+        'final_valid_loss': valid_losses[-1],
+        'num_epochs': len(train_losses)
+    }
+    
+    latest_file = 'results/training_history/latest_runs.csv'
+    if os.path.exists(latest_file):
+        latest_df = pd.read_csv(latest_file)
+        latest_df = pd.concat([latest_df, pd.DataFrame([latest_ref])], ignore_index=True)
+    else:
+        latest_df = pd.DataFrame([latest_ref])
+    
+    latest_df.to_csv(latest_file, index=False)

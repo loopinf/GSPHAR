@@ -7,44 +7,59 @@ from tqdm import tqdm
 
 def compute_spillover_index(data, horizon, lag, scarcity_prop, standardized=True):
     """
-    Compute the Diebold-Yilmaz spillover index to create an adjacency matrix
-    for the network model.
-    
-    Args:
-        data: pandas DataFrame with assets as columns
-        horizon: forecast horizon for variance decomposition
-        lag: number of lags in VAR model
-        scarcity_prop: proportion of smallest values to set to zero
-        standardized: whether to standardize the output matrix
-    
-    Returns:
-        numpy array: Adjacency matrix where A[i,j] represents spillover from i to j
+    Compute the Diebold-Yilmaz spillover index with robust error handling
     """
     # 1. Fit VAR model
     data_array = data.values
     model = VAR(data_array)
     results = model.fit(maxlags=lag)
     
-    # 2. Compute Forecast Error Variance Decomposition (FEVD)
-    Sigma = results.sigma_u  # Residual covariance matrix
-    A = results.orth_ma_rep(maxn=horizon - 1)  # Moving average coefficients
+    # 2. Compute FEVD with error handling
+    try:
+        Sigma = results.sigma_u
+        A = results.orth_ma_rep(maxn=horizon - 1)
+    except np.linalg.LinAlgError:
+        # Add small constant to diagonal for numerical stability
+        epsilon = 1e-8
+        Sigma = results.sigma_u + np.eye(results.sigma_u.shape[0]) * epsilon
+        # Try alternative decomposition method
+        try:
+            A = results.ma_rep(maxn=horizon - 1)  # Use non-orthogonalized MA representation
+        except:
+            # If still fails, use minimal horizon
+            A = results.ma_rep(maxn=1)
+            horizon = 2  # Adjust horizon accordingly
     
     # 3. Calculate numerator and denominator for FEVD
     Sigma_A = []
     A_Sigma_A = []
     for h in range(horizon):
-        # Numerator: normalized shock impact
-        Sigma_A_h = (A[h] @ Sigma @ np.linalg.inv(np.diag(np.sqrt(np.diag(Sigma))))) ** 2
+        try:
+            # Use pseudo-inverse for more stability
+            Sigma_sqrt_inv = np.linalg.pinv(np.diag(np.sqrt(np.diag(Sigma))))
+            Sigma_A_h = (A[h] @ Sigma @ Sigma_sqrt_inv) ** 2
+        except:
+            # Fallback to simpler calculation
+            Sigma_A_h = (A[h] @ Sigma) ** 2
+        
         Sigma_A.append(Sigma_A_h)
         
         # Denominator: total forecast variance
         A_Sigma_A_h = A[h] @ Sigma @ A[h].T
         A_Sigma_A.append(A_Sigma_A_h)
     
-    # 4. Compute Generalized FEVD
+    # 4. Compute Generalized FEVD with error handling
     num = np.cumsum(Sigma_A, axis=0)
     den = np.cumsum(A_Sigma_A, axis=0)
-    gfevd = np.array([num[h] / np.diag(den[h])[:, None] for h in range(horizon)])
+    den_diag = np.array([np.diag(d) for d in den])
+    # Add small constant to avoid division by zero
+    den_diag = den_diag + 1e-10
+    gfevd = np.array([num[h] / den_diag[h][:, None] for h in range(horizon)])
+    
+    if standardized:
+        row_sums = gfevd.sum(axis=2, keepdims=True)
+        row_sums = np.where(row_sums == 0, 1, row_sums)  # Avoid division by zero
+        gfevd = gfevd / row_sums
     
     # 5. Standardize if requested
     if standardized:
