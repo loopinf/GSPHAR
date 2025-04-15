@@ -28,34 +28,8 @@ from scipy.sparse import linalg
 from statsmodels.tsa.api import VAR
 from scipy import stats
 from src.models import GSPHAR
-from src.utils import compute_spillover_index
+from src.utils import compute_spillover_index, save_model, load_model
 from src.dataset import GSPHAR_Dataset
-
-## Save model
-def save_model(name, model, num_L = None, best_loss_val = None):
-    if not os.path.exists('models/'):
-            os.makedirs('models/')
-    # Prepare the model state dictionary
-    config = {
-        'model_state_dict': model.state_dict(),
-        'layer': num_L,
-        'loss': best_loss_val
-    }
-    # Save the model state dictionary
-    torch.save(config, f'models/{name}.tar')
-    return
-
-## Load model
-def load_model(name, model):
-    checkpoint = torch.load(f'models/{name}.tar', map_location='cpu')
-    model.load_state_dict(checkpoint['model_state_dict'])
-    num_L = checkpoint['layer']
-    mae_loss = checkpoint['loss']
-    print(f"Loaded model: {name}")
-    print(f"MAE loss: {mae_loss}")
-    return model, mae_loss
-
-
 
 def train_eval_model(model, dataloader_train, dataloader_test, num_epochs = 200, lr = 0.01):
     best_loss_val = 1000000
