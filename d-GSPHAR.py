@@ -13,9 +13,7 @@ from scipy.linalg import sqrtm
 from scipy.linalg import eig
 
 import statsmodels.api as sm
-
 import os
-
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -31,7 +29,7 @@ from statsmodels.tsa.api import VAR
 from scipy import stats
 from src.models import GSPHAR
 from src.utils import compute_spillover_index
-
+from src.dataset import GSPHAR_Dataset
 
 ## Save model
 def save_model(name, model, num_L = None, best_loss_val = None):
@@ -57,26 +55,6 @@ def load_model(name, model):
     print(f"MAE loss: {mae_loss}")
     return model, mae_loss
 
-class GSPHAR_Dataset(Dataset):
-    def __init__(self, dict):
-        self.dict = dict
-
-    def __len__(self):
-        return len(self.dict.keys())
-
-    def __getitem__(self, idx):
-        date = list(self.dict.keys())[idx]
-        dfs_dict = self.dict[date]
-        y = dfs_dict['y'].values
-        x_lag1 = dfs_dict['x_lag1'].values
-        x_lag5 = dfs_dict['x_lag5'].values
-        x_lag22 = dfs_dict['x_lag22'].values
-        
-        y_tensor = torch.tensor(y, dtype=torch.float32)
-        x_lag1_tensor = torch.tensor(x_lag1, dtype=torch.float32)
-        x_lag5_tensor = torch.tensor(x_lag5, dtype=torch.float32)
-        x_lag22_tensor = torch.tensor(x_lag22, dtype=torch.float32)
-        return x_lag1_tensor, x_lag5_tensor, x_lag22_tensor, y_tensor
 
 
 def train_eval_model(model, dataloader_train, dataloader_test, num_epochs = 200, lr = 0.01):
