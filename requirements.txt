@@ -1,6 +1,7 @@
 torch
 pandas
 numpy
+scikit-learn
 scipy
 statsmodels
 tqdm
