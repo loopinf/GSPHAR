@@ -25,8 +25,6 @@ if torch.cuda.is_available():
 
 
 from scipy.sparse import linalg
-from statsmodels.tsa.api import VAR
-from scipy import stats
 from src.models import GSPHAR
 from src.utils import compute_spillover_index, save_model, load_model
 from src.dataset import GSPHAR_Dataset
