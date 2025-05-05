@@ -29,7 +29,8 @@ class GSPHAR(nn.Module):
             A (numpy.ndarray): Adjacency matrix.
         """
         super(GSPHAR, self).__init__()
-        self.A = torch.from_numpy(A)
+        # Convert adjacency matrix to float32 to ensure compatibility with MPS
+        self.A = torch.from_numpy(A).float()  # Explicitly convert to float32
         self.filter_size = filter_size
 
         # Convolutional layers for different lag windows
@@ -159,6 +160,7 @@ class GSPHAR(nn.Module):
             sorted_indices = np.argsort(sub_Lambda)  # Sort in ascending order
             sub_U_dega_sorted = sub_U_dega[sorted_indices, :]
             sub_U_sorted = sub_U[:, sorted_indices]
+            # Explicitly use float32 for compatibility with MPS
             sub_U_dega = torch.complex(
                 torch.tensor(sub_U_dega.real, dtype=torch.float32),
                 torch.tensor(sub_U_dega.imag, dtype=torch.float32)
