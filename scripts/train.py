@@ -20,12 +20,13 @@ from src.data import load_data, split_data, create_lagged_features, prepare_data
 from src.models import GSPHAR
 from src.training import GSPHARTrainer
 from src.utils import compute_spillover_index, load_model
+from src.utils.device_utils import set_device_seeds
 
 
 def parse_args():
     """
     Parse command line arguments.
-    
+
     Returns:
         argparse.Namespace: Parsed arguments.
     """
@@ -65,46 +66,43 @@ def main():
     """
     # Parse arguments
     args = parse_args()
-    
-    # Set random seed
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(args.seed)
-        torch.cuda.manual_seed_all(args.seed)
-    
+
+    # Set random seed for all devices
+    set_device_seeds(seed=args.seed, device=args.device)
+
     # Load data
     print(f"Loading data from {args.data_file}...")
     data = load_data(args.data_file)
-    
+
     # Split data
     print(f"Splitting data with ratio {args.train_split}...")
     train_dataset_raw, test_dataset_raw = split_data(data, args.train_split)
-    
+
     # Get market indices
     market_indices_list = train_dataset_raw.columns.tolist()
-    
+
     # Compute spillover index
     print(f"Computing spillover index with horizon {args.horizon} and lag {args.look_back}...")
     DY_adj = compute_spillover_index(train_dataset_raw, args.horizon, args.look_back, 0.0, standardized=True)
-    
+
     # Create lagged features
     print("Creating lagged features...")
     train_dataset = create_lagged_features(train_dataset_raw, market_indices_list, args.horizon, args.look_back)
     test_dataset = create_lagged_features(test_dataset_raw, market_indices_list, args.horizon, args.look_back)
-    
+
     # Prepare data dictionaries
     print("Preparing data dictionaries...")
     train_dict = prepare_data_dict(train_dataset, market_indices_list, args.look_back)
     test_dict = prepare_data_dict(test_dataset, market_indices_list, args.look_back)
-    
+
     # Create dataloaders
     print(f"Creating dataloaders with batch size {args.batch_size}...")
     dataloader_train, dataloader_test = create_dataloaders(train_dict, test_dict, args.batch_size)
-    
+
     # Create model
     print("Creating model...")
     model = GSPHAR(args.input_dim, args.output_dim, args.filter_size, DY_adj)
-    
+
     # Create optimizer and scheduler
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scheduler = optim.lr_scheduler.OneCycleLR(
@@ -114,7 +112,7 @@ def main():
         epochs=args.epochs,
         three_phase=True
     )
-    
+
     # Create trainer
     trainer = GSPHARTrainer(
         model=model,
@@ -123,7 +121,7 @@ def main():
         optimizer=optimizer,
         scheduler=scheduler
     )
-    
+
     # Train model
     print(f"Training model for {args.epochs} epochs with patience {args.patience}...")
     model_save_name = settings.MODEL_SAVE_NAME_PATTERN.format(
@@ -137,11 +135,11 @@ def main():
         patience=args.patience,
         model_save_name=model_save_name
     )
-    
+
     # Load best model
     print(f"Loading best model {model_save_name}...")
     trained_model, mae_loss = load_model(model_save_name, model)
-    
+
     print(f"Training completed. Best validation loss: {best_loss_val:.4f}")
 
 
