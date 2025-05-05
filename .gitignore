@@ -1,7 +1,7 @@
 __pycache__/
 results/
 unzip_/
-data/
+/data/
 backup/
 .vscode/
 cache_*/
