@@ -241,19 +241,97 @@ class GSPHAR(nn.Module):
         # Apply 1D convolution to lag5 and lag22
         # Reshape to match the expected input shape for Conv1d
         # Conv1d expects input of shape [batch_size, channels, sequence_length]
-        # Our data is [batch_size, sequence_length, channels], so we need to permute
-        x_lag5_spectral_real_permuted = x_lag5_spectral_real.permute(0, 1, 2)  # [batch_size, filter_size, 5]
-        x_lag5_spectral_imag_permuted = x_lag5_spectral_imag.permute(0, 1, 2)  # [batch_size, filter_size, 5]
+        # Our data is [batch_size, sequence_length, channels], so we need to permute and reshape
 
-        x_lag22_spectral_real_permuted = x_lag22_spectral_real.permute(0, 1, 2)  # [batch_size, filter_size, 22]
-        x_lag22_spectral_imag_permuted = x_lag22_spectral_imag.permute(0, 1, 2)  # [batch_size, filter_size, 22]
+        # For lag5 - reshape to match the expected input shape with filter_size channels
+        batch_size, num_markets, seq_len = x_lag5_spectral_real.shape
+
+        # Check if num_markets is divisible by filter_size
+        if num_markets % self.filter_size != 0:
+            # If not divisible, we need to pad the tensor
+            pad_size = self.filter_size - (num_markets % self.filter_size)
+            padding = torch.zeros(batch_size, pad_size, seq_len, device=device)
+            x_lag5_spectral_real = torch.cat([x_lag5_spectral_real, padding], dim=1)
+            x_lag5_spectral_imag = torch.cat([x_lag5_spectral_imag, padding], dim=1)
+            num_markets = x_lag5_spectral_real.shape[1]  # Update num_markets after padding
+
+        # Reshape to ensure we have filter_size channels
+        # First transpose to get [batch_size, seq_len, num_markets]
+        x_lag5_spectral_real_transposed = x_lag5_spectral_real.transpose(1, 2)
+        x_lag5_spectral_imag_transposed = x_lag5_spectral_imag.transpose(1, 2)
+
+        # Then reshape to [batch_size * seq_len, filter_size, num_markets // filter_size]
+        x_lag5_spectral_real_reshaped = x_lag5_spectral_real_transposed.reshape(batch_size * seq_len, self.filter_size, -1)
+        x_lag5_spectral_imag_reshaped = x_lag5_spectral_imag_transposed.reshape(batch_size * seq_len, self.filter_size, -1)
+
+        # For lag22
+        batch_size, num_markets, seq_len = x_lag22_spectral_real.shape
+
+        # Check if num_markets is divisible by filter_size
+        if num_markets % self.filter_size != 0:
+            # If not divisible, we need to pad the tensor
+            pad_size = self.filter_size - (num_markets % self.filter_size)
+            padding = torch.zeros(batch_size, pad_size, seq_len, device=device)
+            x_lag22_spectral_real = torch.cat([x_lag22_spectral_real, padding], dim=1)
+            x_lag22_spectral_imag = torch.cat([x_lag22_spectral_imag, padding], dim=1)
+            num_markets = x_lag22_spectral_real.shape[1]  # Update num_markets after padding
+
+        # Reshape to ensure we have filter_size channels
+        # First transpose to get [batch_size, seq_len, num_markets]
+        x_lag22_spectral_real_transposed = x_lag22_spectral_real.transpose(1, 2)
+        x_lag22_spectral_imag_transposed = x_lag22_spectral_imag.transpose(1, 2)
+
+        # Then reshape to [batch_size * seq_len, filter_size, num_markets // filter_size]
+        x_lag22_spectral_real_reshaped = x_lag22_spectral_real_transposed.reshape(batch_size * seq_len, self.filter_size, -1)
+        x_lag22_spectral_imag_reshaped = x_lag22_spectral_imag_transposed.reshape(batch_size * seq_len, self.filter_size, -1)
 
         # Apply 1D convolution to lag5 and lag22
-        x_lag5_conv_real = self.conv1d_lag5(x_lag5_spectral_real_permuted)
-        x_lag5_conv_imag = self.conv1d_lag5(x_lag5_spectral_imag_permuted)
+        x_lag5_conv_real = self.conv1d_lag5(x_lag5_spectral_real_reshaped)
+        x_lag5_conv_imag = self.conv1d_lag5(x_lag5_spectral_imag_reshaped)
 
-        x_lag22_conv_real = self.conv1d_lag22(x_lag22_spectral_real_permuted)
-        x_lag22_conv_imag = self.conv1d_lag22(x_lag22_spectral_imag_permuted)
+        # For lag22, check if the input size is smaller than the kernel size
+        # If so, we need to pad the input or use a smaller kernel
+        input_size = x_lag22_spectral_real_reshaped.shape[2]
+        kernel_size = self.conv1d_lag22.weight.shape[2]
+
+        if input_size < kernel_size:
+            # Option 1: Pad the input
+            padding_size = kernel_size - input_size
+            x_lag22_spectral_real_padded = F.pad(x_lag22_spectral_real_reshaped, (0, padding_size))
+            x_lag22_spectral_imag_padded = F.pad(x_lag22_spectral_imag_reshaped, (0, padding_size))
+
+            x_lag22_conv_real = self.conv1d_lag22(x_lag22_spectral_real_padded)
+            x_lag22_conv_imag = self.conv1d_lag22(x_lag22_spectral_imag_padded)
+        else:
+            # If input size is large enough, proceed normally
+            x_lag22_conv_real = self.conv1d_lag22(x_lag22_spectral_real_reshaped)
+            x_lag22_conv_imag = self.conv1d_lag22(x_lag22_spectral_imag_reshaped)
+
+        # Reshape back to original batch size
+        # The output of conv1d is [batch_size * seq_len, filter_size, 1]
+        # We need to reshape it back to [batch_size, num_markets, 1]
+
+        # First reshape to [batch_size, seq_len, filter_size, num_markets // filter_size]
+        x_lag5_conv_real = x_lag5_conv_real.reshape(batch_size, seq_len, self.filter_size, -1)
+        x_lag5_conv_imag = x_lag5_conv_imag.reshape(batch_size, seq_len, self.filter_size, -1)
+
+        x_lag22_conv_real = x_lag22_conv_real.reshape(batch_size, seq_len, self.filter_size, -1)
+        x_lag22_conv_imag = x_lag22_conv_imag.reshape(batch_size, seq_len, self.filter_size, -1)
+
+        # Then reshape to [batch_size, filter_size * (num_markets // filter_size), seq_len]
+        # which is equivalent to [batch_size, num_markets, seq_len]
+        x_lag5_conv_real = x_lag5_conv_real.reshape(batch_size, self.filter_size, -1).transpose(1, 2)
+        x_lag5_conv_imag = x_lag5_conv_imag.reshape(batch_size, self.filter_size, -1).transpose(1, 2)
+
+        x_lag22_conv_real = x_lag22_conv_real.reshape(batch_size, self.filter_size, -1).transpose(1, 2)
+        x_lag22_conv_imag = x_lag22_conv_imag.reshape(batch_size, self.filter_size, -1).transpose(1, 2)
+
+        # Finally, take the mean across the sequence dimension to get [batch_size, num_markets, 1]
+        x_lag5_conv_real = x_lag5_conv_real.mean(dim=2, keepdim=True)
+        x_lag5_conv_imag = x_lag5_conv_imag.mean(dim=2, keepdim=True)
+
+        x_lag22_conv_real = x_lag22_conv_real.mean(dim=2, keepdim=True)
+        x_lag22_conv_imag = x_lag22_conv_imag.mean(dim=2, keepdim=True)
 
         # Get the weights
         softmax_param_5 = self.conv1d_lag5.weight
