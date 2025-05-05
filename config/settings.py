@@ -28,4 +28,5 @@ MODEL_SAVE_NAME_PATTERN = 'GSPHAR_{filter_size}_magnet_dynamic_h{h}'  # Pattern 
 MODEL_DIR = 'models/'  # Directory to save trained models
 
 # Device configuration
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'  # Device to use for computation
+from src.utils.device_utils import get_device
+DEVICE = get_device()  # Will automatically select the best available device

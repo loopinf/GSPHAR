@@ -4,6 +4,15 @@ This repository contains the implementation of the Graph Signal Processing for H
 
 The code corresponds to the following research article: Chi, Z., Gao, J., & Wang, C. (2024). Graph Signal Processing for Global Stock Market Volatility Forecasting. _arXiv preprint arXiv:2410.22706_.
 
+## Features
+
+- Graph Signal Processing for Heterogeneous Autoregressive (GSPHAR) model
+- Efficient data loading and preprocessing
+- Training with early stopping
+- Model evaluation and prediction
+- Visualization utilities
+- Hardware acceleration support (CUDA, MPS, CPU)
+
 ## Project Structure
 
 ```bash
@@ -85,6 +94,26 @@ python scripts/inference.py --data-file path/to/data.csv --model-name model_name
 ## Configuration
 
 The model configuration is defined in `config/settings.py`. You can modify this file to change default parameters or pass them as command-line arguments to the scripts.
+
+### Hardware Acceleration
+
+The code automatically selects the best available hardware acceleration in the following order:
+
+1. CUDA (NVIDIA GPUs)
+2. MPS (Apple Silicon)
+3. CPU (fallback)
+
+This is implemented through a dedicated device utility module (`src/utils/device_utils.py`) that provides consistent device handling across the codebase.
+
+You can override this by setting the `--device` parameter when running scripts:
+
+```bash
+# Force CPU usage
+python scripts/train.py --device cpu
+
+# Use MPS on Apple Silicon
+python scripts/inference.py --device mps
+```
 
 ## Testing
 
