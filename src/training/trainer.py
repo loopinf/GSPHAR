@@ -10,6 +10,7 @@ import numpy as np
 import os
 
 from src.utils.model_utils import save_model
+from src.utils.device_utils import get_device, to_device
 
 
 class GSPHARTrainer:
@@ -32,7 +33,10 @@ class GSPHARTrainer:
             learning_rate (float, optional): Learning rate for the optimizer if not provided. Defaults to 0.01.
         """
         self.model = model
-        self.device = device if device is not None else ('cuda' if torch.cuda.is_available() else 'cpu')
+
+        # Use device utility for consistent device selection
+        self.device = get_device(device)
+
         self.criterion = criterion if criterion is not None else nn.MSELoss()
 
         # Create optimizer if not provided
@@ -206,7 +210,8 @@ def evaluate_model(model, dataloader_test, device=None):
     Returns:
         float: Validation loss.
     """
-    device = device if device is not None else ('cuda' if torch.cuda.is_available() else 'cpu')
+    # Use device utility for consistent device selection
+    device = get_device(device)
     model.to(device)
     criterion = nn.L1Loss()
     criterion = criterion.to(device)

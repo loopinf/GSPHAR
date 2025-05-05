@@ -19,12 +19,13 @@ from config import settings
 from src.data import load_data, split_data, create_lagged_features, prepare_data_dict, create_dataloaders
 from src.models import GSPHAR
 from src.utils import compute_spillover_index, load_model
+from src.utils.device_utils import get_device, to_device
 
 
 def parse_args():
     """
     Parse command line arguments.
-    
+
     Returns:
         argparse.Namespace: Parsed arguments.
     """
@@ -60,43 +61,45 @@ def main():
     """
     # Parse arguments
     args = parse_args()
-    
-    # Set device
-    device = args.device
-    
+
+    # Set device using our utility function
+    device = get_device(args.device)
+
+    print(f"Using device: {device}")
+
     # Load data
     print(f"Loading data from {args.data_file}...")
     data = load_data(args.data_file)
-    
+
     # Split data
     print(f"Splitting data with ratio {args.train_split}...")
     train_dataset_raw, test_dataset_raw = split_data(data, args.train_split)
-    
+
     # Get market indices
     market_indices_list = train_dataset_raw.columns.tolist()
-    
+
     # Compute spillover index
     print(f"Computing spillover index with horizon {args.horizon} and lag {args.look_back}...")
     DY_adj = compute_spillover_index(train_dataset_raw, args.horizon, args.look_back, 0.0, standardized=True)
-    
+
     # Create lagged features
     print("Creating lagged features...")
     train_dataset = create_lagged_features(train_dataset_raw, market_indices_list, args.horizon, args.look_back)
     test_dataset = create_lagged_features(test_dataset_raw, market_indices_list, args.horizon, args.look_back)
-    
+
     # Prepare data dictionaries
     print("Preparing data dictionaries...")
     train_dict = prepare_data_dict(train_dataset, market_indices_list, args.look_back)
     test_dict = prepare_data_dict(test_dataset, market_indices_list, args.look_back)
-    
+
     # Create dataloaders
     print(f"Creating dataloaders with batch size {args.batch_size}...")
     _, dataloader_test = create_dataloaders(train_dict, test_dict, args.batch_size)
-    
+
     # Create model
     print("Creating model...")
     model = GSPHAR(args.input_dim, args.output_dim, args.filter_size, DY_adj)
-    
+
     # Load trained model
     model_name = args.model_name
     if model_name is None:
@@ -106,37 +109,37 @@ def main():
         )
     print(f"Loading trained model {model_name}...")
     trained_model, _ = load_model(model_name, model)
-    
+
     # Run inference
     print("Running inference...")
     y_hat_list = []
     y_list = []
-    
+
     trained_model.eval()
     trained_model.to(device)
-    
+
     with torch.no_grad():
         for x_lag1, x_lag5, x_lag22, y in dataloader_test:
             # Move data to device
             x_lag1 = x_lag1.to(device)
             x_lag5 = x_lag5.to(device)
             x_lag22 = x_lag22.to(device)
-            
+
             # Forward pass
             y_hat, _, _ = trained_model(x_lag1, x_lag5, x_lag22)
-            
+
             # Append the predicted and actual values to their respective lists
             y_hat_list.append(y_hat.cpu().numpy())
             y_list.append(y.cpu().numpy())
-    
+
     # Concatenate the results
     y_hat_concatenated = np.concatenate(y_hat_list, axis=0)
     y_concatenated = np.concatenate(y_list, axis=0)
-    
+
     # Create DataFrames
     rv_hat_GSPHAR_dynamic = pd.DataFrame(data=y_hat_concatenated, columns=market_indices_list)
     rv_true = pd.DataFrame(data=y_concatenated, columns=market_indices_list)
-    
+
     # Create prediction DataFrame
     pred_GSPHAR_dynamic_df = pd.DataFrame()
     for market_index in market_indices_list:
@@ -144,12 +147,12 @@ def main():
         true_column = market_index + '_rv_true'
         pred_GSPHAR_dynamic_df[pred_column] = rv_hat_GSPHAR_dynamic[market_index]
         pred_GSPHAR_dynamic_df[true_column] = rv_true[market_index]
-    
+
     # Save predictions if output file is specified
     if args.output_file is not None:
         print(f"Saving predictions to {args.output_file}...")
         pred_GSPHAR_dynamic_df.to_csv(args.output_file)
-    
+
     print("Inference completed.")
 
 

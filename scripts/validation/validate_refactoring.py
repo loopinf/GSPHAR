@@ -22,6 +22,7 @@ from src.data import load_data, split_data, create_lagged_features, prepare_data
 from src.models import GSPHAR
 from src.training import GSPHARTrainer
 from src.utils import compute_spillover_index, load_model
+from src.utils.device_utils import get_device, set_device_seeds
 
 # Import original implementation (from tmp folder)
 from tmp.d_GSPHAR import GSPHAR as GSPHAR_Original
@@ -46,11 +47,8 @@ def run_original_implementation(data_file, h=5, num_epochs=5, lr=0.01):
     """
     print("Running original implementation...")
 
-    # Set random seed for reproducibility
-    torch.manual_seed(42)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(42)
-        torch.cuda.manual_seed_all(42)
+    # Set random seed for reproducibility using our utility function
+    set_device_seeds()
 
     # Load data
     data = pd.read_csv(data_file, index_col=0) * 100
@@ -220,11 +218,8 @@ def run_refactored_implementation(data_file, h=5, num_epochs=5, lr=0.01):
     """
     print("Running refactored implementation...")
 
-    # Set random seed for reproducibility
-    torch.manual_seed(42)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(42)
-        torch.cuda.manual_seed_all(42)
+    # Set random seed for reproducibility using our utility function
+    set_device_seeds()
 
     # Load data
     data = load_data(data_file)
@@ -278,10 +273,10 @@ def run_refactored_implementation(data_file, h=5, num_epochs=5, lr=0.01):
         three_phase=True
     )
 
-    # Create trainer
+    # Create trainer with device from our utility function
     trainer = GSPHARTrainer(
         model=model,
-        device=settings.DEVICE,
+        device=get_device(),
         criterion=torch.nn.MSELoss(),
         optimizer=optimizer,
         scheduler=scheduler
@@ -305,10 +300,11 @@ def run_refactored_implementation(data_file, h=5, num_epochs=5, lr=0.01):
 
     with torch.no_grad():
         for x_lag1, x_lag5, x_lag22, y in dataloader_test:
-            # Move data to device
-            x_lag1 = x_lag1.to(settings.DEVICE)
-            x_lag5 = x_lag5.to(settings.DEVICE)
-            x_lag22 = x_lag22.to(settings.DEVICE)
+            # Move data to device using our utility function
+            device = get_device()
+            x_lag1 = x_lag1.to(device)
+            x_lag5 = x_lag5.to(device)
+            x_lag22 = x_lag22.to(device)
 
             # Forward pass
             y_hat, _, _ = model(x_lag1, x_lag5, x_lag22)
@@ -424,7 +420,7 @@ def plot_comparison(original_predictions, refactored_predictions, actual_values,
 
     # Create results directory if it doesn't exist
     os.makedirs('results', exist_ok=True)
-    
+
     # Save the figure
     plt.savefig('results/comparison_plot.png')
     print("Plot saved as 'results/comparison_plot.png'")
@@ -476,7 +472,7 @@ def main():
 
     # Create results directory if it doesn't exist
     os.makedirs('results', exist_ok=True)
-    
+
     # Save comparison results
     comparison_results.to_csv('results/comparison_results.csv')
     print("Comparison results saved as 'results/comparison_results.csv'")
