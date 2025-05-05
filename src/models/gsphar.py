@@ -148,11 +148,8 @@ class GSPHAR(nn.Module):
         # normalization
         A = F.softmax(A, dim=1)
 
-        # Initialize lists for real and imaginary parts
-        U_dega_real_list = []
-        U_dega_imag_list = []
-        U_real_list = []
-        U_imag_list = []
+        U_dega_list = []
+        U_list = []
         for i in range(len(A)):
             sub_A = A[i]
             sub_L = self.nomalized_magnet_laplacian(sub_A.cpu().numpy(), 0.25)
@@ -163,24 +160,22 @@ class GSPHAR(nn.Module):
             sorted_indices = np.argsort(sub_Lambda)  # Sort in ascending order
             sub_U_dega_sorted = sub_U_dega[sorted_indices, :]
             sub_U_sorted = sub_U[:, sorted_indices]
-            # Use separate real and imaginary parts for MPS compatibility
-            sub_U_dega_real = torch.tensor(sub_U_dega.real, dtype=torch.float32)
-            sub_U_dega_imag = torch.tensor(sub_U_dega.imag, dtype=torch.float32)
-            sub_U_real = torch.tensor(sub_U.real, dtype=torch.float32)
-            sub_U_imag = torch.tensor(sub_U.imag, dtype=torch.float32)
-            # Store real and imaginary parts separately
-            U_dega_real_list.append(sub_U_dega_real)
-            U_dega_imag_list.append(sub_U_dega_imag)
-            U_real_list.append(sub_U_real)
-            U_imag_list.append(sub_U_imag)
+            # Explicitly use float32 for compatibility with MPS
+            sub_U_dega = torch.complex(
+                torch.tensor(sub_U_dega.real, dtype=torch.float32),
+                torch.tensor(sub_U_dega.imag, dtype=torch.float32)
+            )
+            sub_U = torch.complex(
+                torch.tensor(sub_U.real, dtype=torch.float32),
+                torch.tensor(sub_U.imag, dtype=torch.float32)
+            )
+            U_dega_list.append(sub_U_dega)
+            U_list.append(sub_U)
 
-        # Stack the real and imaginary parts separately
-        U_dega_real = torch.stack(U_dega_real_list)
-        U_dega_imag = torch.stack(U_dega_imag_list)
-        U_real = torch.stack(U_real_list)
-        U_imag = torch.stack(U_imag_list)
+        U_dega = torch.stack(U_dega_list)
+        U = torch.stack(U_list)
 
-        return U_dega_real, U_dega_imag, U_real, U_imag
+        return U_dega, U
 
     def forward(self, x_lag1, x_lag5, x_lag22):
         """
@@ -202,131 +197,79 @@ class GSPHAR(nn.Module):
         self.spatial_process = self.spatial_process.to(device)
         self.linear_output = self.linear_output.to(device)
 
-        # Compute dynamic adj_mx - now returns separate real and imaginary parts
-        U_dega_real, U_dega_imag, U_real, U_imag = self.dynamic_magnet_Laplacian(A, x_lag5, x_lag22)
-        U_dega_real = U_dega_real.to(device)
-        U_dega_imag = U_dega_imag.to(device)
-        U_real = U_real.to(device)
-        U_imag = U_imag.to(device)
+        # Compute dynamic adj_mx
+        U_dega, U = self.dynamic_magnet_Laplacian(A, x_lag5, x_lag22)
+        U_dega = U_dega.to(device)
+        U = U.to(device)
 
-        # Create zero tensors for imaginary parts (since our inputs are real)
-        x_lag1_imag = torch.zeros_like(x_lag1)
-        x_lag5_imag = torch.zeros_like(x_lag5)
-        x_lag22_imag = torch.zeros_like(x_lag22)
+        # Convert RV to complex domain
+        x_lag1 = torch.complex(x_lag1, torch.zeros_like(x_lag1))
+        x_lag5 = torch.complex(x_lag5, torch.zeros_like(x_lag5))
+        x_lag22 = torch.complex(x_lag22, torch.zeros_like(x_lag22))
 
-        # Transform to spectral domain - handle real and imaginary parts separately
-        # For complex matrix multiplication (a+bi)(c+di) = (ac-bd) + (ad+bc)i
-
-        # For x_lag1 (with unsqueeze for dimension matching)
-        x_lag1_unsqueezed = x_lag1.unsqueeze(-1)
-        x_lag1_imag_unsqueezed = x_lag1_imag.unsqueeze(-1)
-
-        # Real part: U_dega_real * x_lag1 - U_dega_imag * x_lag1_imag (which is zero)
-        x_lag1_spectral_real = torch.matmul(U_dega_real, x_lag1_unsqueezed)
-        # Imaginary part: U_dega_real * x_lag1_imag (zero) + U_dega_imag * x_lag1
-        x_lag1_spectral_imag = torch.matmul(U_dega_imag, x_lag1_unsqueezed)
-
-        # For x_lag5
-        # Real part: U_dega_real * x_lag5 - U_dega_imag * x_lag5_imag (which is zero)
-        x_lag5_spectral_real = torch.matmul(U_dega_real, x_lag5)
-        # Imaginary part: U_dega_real * x_lag5_imag (zero) + U_dega_imag * x_lag5
-        x_lag5_spectral_imag = torch.matmul(U_dega_imag, x_lag5)
-
-        # For x_lag22
-        # Real part: U_dega_real * x_lag22 - U_dega_imag * x_lag22_imag (which is zero)
-        x_lag22_spectral_real = torch.matmul(U_dega_real, x_lag22)
-        # Imaginary part: U_dega_real * x_lag22_imag (zero) + U_dega_imag * x_lag22
-        x_lag22_spectral_imag = torch.matmul(U_dega_imag, x_lag22)
+        # Transform to spectral domain
+        x_lag1_spectral = torch.matmul(U_dega, x_lag1.unsqueeze(-1))
+        x_lag5_spectral = torch.matmul(U_dega, x_lag5)
+        x_lag22_spectral = torch.matmul(U_dega, x_lag22)
 
         # Apply 1D convolution to lag5 and lag22
-        # We need to handle each market separately to avoid dimension issues
-        batch_size, num_markets, seq_len_5 = x_lag5_spectral_real.shape
-        _, _, seq_len_22 = x_lag22_spectral_real.shape
+        # Reshape to match the expected input shape for Conv1d
+        # Conv1d expects input of shape [batch_size, channels, sequence_length]
+        # Our data is [batch_size, sequence_length, channels], so we need to permute
+        x_lag5_spectral_real = x_lag5_spectral.real.permute(0, 1, 2)  # [batch_size, filter_size, 5]
+        x_lag5_spectral_imag = x_lag5_spectral.imag.permute(0, 1, 2)  # [batch_size, filter_size, 5]
 
-        # Initialize output tensors
-        x_lag5_conv_real = torch.zeros(batch_size, num_markets, 1, device=device)
-        x_lag5_conv_imag = torch.zeros(batch_size, num_markets, 1, device=device)
-        x_lag22_conv_real = torch.zeros(batch_size, num_markets, 1, device=device)
-        x_lag22_conv_imag = torch.zeros(batch_size, num_markets, 1, device=device)
+        x_lag22_spectral_real = x_lag22_spectral.real.permute(0, 1, 2)  # [batch_size, filter_size, 22]
+        x_lag22_spectral_imag = x_lag22_spectral.imag.permute(0, 1, 2)  # [batch_size, filter_size, 22]
 
-        # Process each market separately
-        for i in range(num_markets):
-            # For lag5
-            # Extract the i-th market data and reshape for Conv1d
-            # Conv1d expects [batch_size, channels, seq_len]
-            x_lag5_real_i = x_lag5_spectral_real[:, i, :].unsqueeze(1)  # [batch_size, 1, seq_len_5]
-            x_lag5_imag_i = x_lag5_spectral_imag[:, i, :].unsqueeze(1)  # [batch_size, 1, seq_len_5]
+        # Apply 1D convolution to lag5 and lag22
+        x_lag5_conv_real = self.conv1d_lag5(x_lag5_spectral_real)
+        x_lag5_conv_imag = self.conv1d_lag5(x_lag5_spectral_imag)
 
-            # Apply 1D convolution using a simple average (equivalent to the initialized conv1d_lag5)
-            # This is equivalent to the original convolution with constant weights of 1/5
-            x_lag5_conv_real[:, i, 0] = x_lag5_real_i.squeeze(1).mean(dim=1)
-            x_lag5_conv_imag[:, i, 0] = x_lag5_imag_i.squeeze(1).mean(dim=1)
-
-            # For lag22
-            # Extract the i-th market data and reshape for Conv1d
-            x_lag22_real_i = x_lag22_spectral_real[:, i, :].unsqueeze(1)  # [batch_size, 1, seq_len_22]
-            x_lag22_imag_i = x_lag22_spectral_imag[:, i, :].unsqueeze(1)  # [batch_size, 1, seq_len_22]
-
-            # Check if we need to pad for lag22
-            if seq_len_22 < 22:
-                padding_size = 22 - seq_len_22
-                x_lag22_real_i = F.pad(x_lag22_real_i, (0, padding_size))
-                x_lag22_imag_i = F.pad(x_lag22_imag_i, (0, padding_size))
-
-            # Apply 1D convolution using a simple average (equivalent to the initialized conv1d_lag22)
-            # This is equivalent to the original convolution with constant weights of 1/22
-            x_lag22_conv_real[:, i, 0] = x_lag22_real_i.squeeze(1).mean(dim=1)
-            x_lag22_conv_imag[:, i, 0] = x_lag22_imag_i.squeeze(1).mean(dim=1)
+        x_lag22_conv_real = self.conv1d_lag22(x_lag22_spectral_real)
+        x_lag22_conv_imag = self.conv1d_lag22(x_lag22_spectral_imag)
 
         # Get the weights
         softmax_param_5 = self.conv1d_lag5.weight
         softmax_param_22 = self.conv1d_lag22.weight
 
+        # Combine the real and imaginary parts
+        x_lag5_conv = torch.complex(x_lag5_conv_real, x_lag5_conv_imag)
+        x_lag22_conv = torch.complex(x_lag22_conv_real, x_lag22_conv_imag)
+
+        # No need to permute back since we're already in the right shape
+        # The output of conv1d is [batch_size, filter_size, 1]
+
         # Concatenate the lag1, lag5, and lag22 features
         # Ensure all tensors have the same shape before concatenation
-        x_lag1_spectral_real_squeezed = x_lag1_spectral_real.squeeze(-1)  # [batch_size, num_markets]
-        x_lag1_spectral_imag_squeezed = x_lag1_spectral_imag.squeeze(-1)  # [batch_size, num_markets]
+        x_lag1_spectral_squeezed = x_lag1_spectral.squeeze(-1)  # [batch_size, filter_size]
+        x_lag5_conv_squeezed = x_lag5_conv.squeeze(-1)  # [batch_size, filter_size]
+        x_lag22_conv_squeezed = x_lag22_conv.squeeze(-1)  # [batch_size, filter_size]
 
-        x_lag5_conv_real_squeezed = x_lag5_conv_real.squeeze(-1)  # [batch_size, num_markets]
-        x_lag5_conv_imag_squeezed = x_lag5_conv_imag.squeeze(-1)  # [batch_size, num_markets]
-
-        x_lag22_conv_real_squeezed = x_lag22_conv_real.squeeze(-1)  # [batch_size, num_markets]
-        x_lag22_conv_imag_squeezed = x_lag22_conv_imag.squeeze(-1)  # [batch_size, num_markets]
-
-        # Stack them along a new dimension to create [batch_size, num_markets, 3]
-        # Handle real and imaginary parts separately
-        lagged_rv_spectral_real = torch.stack([
-            x_lag1_spectral_real_squeezed,
-            x_lag5_conv_real_squeezed,
-            x_lag22_conv_real_squeezed
-        ], dim=-1)
-
-        lagged_rv_spectral_imag = torch.stack([
-            x_lag1_spectral_imag_squeezed,
-            x_lag5_conv_imag_squeezed,
-            x_lag22_conv_imag_squeezed
+        # Stack them along a new dimension to create [batch_size, filter_size, 3]
+        lagged_rv_spectral = torch.stack([
+            x_lag1_spectral_squeezed,
+            x_lag5_conv_squeezed,
+            x_lag22_conv_squeezed
         ], dim=-1)
 
         # Apply linear transformation separately to the real and imaginary parts
-        # Linear layer expects [batch_size, num_markets, input_dim] and outputs [batch_size, num_markets, output_dim]
-        y_hat_real = self.linear_output(lagged_rv_spectral_real)
-        y_hat_imag = self.linear_output(lagged_rv_spectral_imag)
+        # Linear layer expects [batch_size, filter_size, input_dim] and outputs [batch_size, filter_size, output_dim]
+        y_hat_real = self.linear_output(lagged_rv_spectral.real)
+        y_hat_imag = self.linear_output(lagged_rv_spectral.imag)
+        y_hat_spectral = torch.complex(y_hat_real, y_hat_imag)
 
-        # Back to the spatial domain - complex matrix multiplication
-        # (a+bi)(c+di) = (ac-bd) + (ad+bc)i
-        # Real part: U_real * y_hat_real - U_imag * y_hat_imag
-        y_hat_spatial_real = torch.matmul(U_real, y_hat_real) - torch.matmul(U_imag, y_hat_imag)
-        # Imaginary part: U_real * y_hat_imag + U_imag * y_hat_real
-        y_hat_spatial_imag = torch.matmul(U_real, y_hat_imag) + torch.matmul(U_imag, y_hat_real)
+        # Back to the spatial domain
+        y_hat = torch.matmul(U, y_hat_spectral)
 
-        # Squeeze to remove the last dimension
-        y_hat_spatial_real = y_hat_spatial_real.squeeze(-1)
-        y_hat_spatial_imag = y_hat_spatial_imag.squeeze(-1)
+        y_hat_real = y_hat.real  # [batch_size, num_markets, 1]
+        y_hat_imag = y_hat.imag  # [batch_size, num_markets, 1]
+        y_hat_real = y_hat_real.squeeze(-1)
+        y_hat_imag = y_hat_imag.squeeze(-1)
 
-        # Stack real and imaginary parts for spatial processing
-        y_hat_spatial = torch.stack((y_hat_spatial_real, y_hat_spatial_imag), dim=-1)
+        y_hat_spatial = torch.stack((y_hat_real, y_hat_imag), dim=-1)
 
-        # Apply linear transformation to the stacked tensor
+        # Apply linear transformation separately to the real and imaginary parts
         y_hat = self.spatial_process(y_hat_spatial)
 
         return y_hat.squeeze(-1), softmax_param_5, softmax_param_22
