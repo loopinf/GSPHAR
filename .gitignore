@@ -7,3 +7,4 @@ backup/
 cache_*/
 checkpoints/
 .DS_Store
+models/GSPHAR_24_magnet_dynamic_h5.tar
