@@ -1,3 +1,123 @@
-# GSPHAR
+# GSPHAR: Graph Signal Processing for Heterogeneous Autoregressive Model
 
-The codes correspond to the following research article: Chi, Z., Gao, J., & Wang, C. (2024). Graph Signal Processing for Global Stock Market Volatility Forecasting. _arXiv preprint arXiv:2410.22706_.
+This repository contains the implementation of the Graph Signal Processing for Heterogeneous Autoregressive (GSPHAR) model for global stock market volatility forecasting.
+
+The code corresponds to the following research article: Chi, Z., Gao, J., & Wang, C. (2024). Graph Signal Processing for Global Stock Market Volatility Forecasting. _arXiv preprint arXiv:2410.22706_.
+
+## Project Structure
+
+```bash
+GSPHAR/
+├── config/                 # Configuration settings
+│   ├── __init__.py
+│   └── settings.py
+├── data/                   # Data files
+│   └── rv5_sqrt_24.csv
+├── models/                 # Saved model files
+├── notebooks/              # Jupyter notebooks (including original implementation)
+├── scripts/                # Entry point scripts
+│   ├── train.py            # Training script
+│   ├── inference.py        # Inference script
+│   └── validation/         # Validation scripts
+│       └── validate_refactoring.py  # Compare implementations
+├── src/                    # Source code
+│   ├── data/               # Data loading and preprocessing
+│   ├── models/             # Model implementations
+│   ├── training/           # Training utilities
+│   └── utils/              # Utility functions
+├── tests/                  # Unit tests
+├── tmp/                    # Original implementation for validation
+│   └── d_GSPHAR.py         # Original GSPHAR implementation
+├── results/                # Results directory for outputs
+├── .gitignore
+├── LICENSE
+├── README.md
+├── requirements.txt
+├── setup.py                # Package setup file
+├── validate.py             # Convenience script for validation
+└── cleanup.py              # Script to remove redundant files
+```
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/GSPHAR.git
+cd GSPHAR
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Or install as a package
+pip install -e .
+```
+
+## Usage
+
+### Training
+
+To train a GSPHAR model with default parameters:
+
+```bash
+python scripts/train.py
+```
+
+To customize training parameters:
+
+```bash
+python scripts/train.py --data-file path/to/data.csv --epochs 1000 --lr 0.001
+```
+
+### Inference
+
+To run inference with a trained model:
+
+```bash
+python scripts/inference.py
+```
+
+To customize inference parameters:
+
+```bash
+python scripts/inference.py --data-file path/to/data.csv --model-name model_name --output-file predictions.csv
+```
+
+## Configuration
+
+The model configuration is defined in `config/settings.py`. You can modify this file to change default parameters or pass them as command-line arguments to the scripts.
+
+## Testing
+
+To run the tests:
+
+```bash
+pytest tests/
+```
+
+## Validation
+
+To validate the refactored implementation against the original:
+
+```bash
+# Using the validation script directly
+python scripts/validation/validate_refactoring.py
+
+# Or using the convenience script from the root directory
+python validate.py
+```
+
+This will run both implementations, compare their outputs, and generate comparison metrics and visualizations in the `results/` directory.
+
+### Temporary Files
+
+The validation script depends on the original implementation files in the `tmp/` directory. These files should be preserved to maintain the validation functionality.
+
+### Cleanup
+
+To remove redundant files while preserving validation functionality:
+
+```bash
+python cleanup.py
+```
+
+This script will remove redundant utility files in the `src/` directory that have been replaced by their counterparts in the appropriate subdirectories.

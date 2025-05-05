@@ -1,16 +1,30 @@
-import torch
-import os
+"""
+Graph utility functions for GSPHAR.
+This module contains functions for graph-related operations.
+"""
+
 import numpy as np
 import pandas as pd
-from scipy.sparse import linalg
 from statsmodels.tsa.api import VAR
-from scipy import stats
-from scipy.linalg import sqrtm
-from scipy.linalg import eig
+
 
 def compute_spillover_index(data, horizon, lag, scarcity_prop, standardized=True):
+    """
+    Compute the spillover index.
+    
+    Args:
+        data (pd.DataFrame): Input data.
+        horizon (int): Forecast horizon.
+        lag (int): Number of lags.
+        scarcity_prop (float): Sparsity proportion.
+        standardized (bool, optional): Whether to standardize the result. Defaults to True.
+        
+    Returns:
+        numpy.ndarray: Spillover matrix.
+    """
     # Input data should be np.array
     data_array = data.values
+    
     # Fit VAR model
     model = VAR(data_array)
     results = model.fit(maxlags=lag)
@@ -31,24 +45,21 @@ def compute_spillover_index(data, horizon, lag, scarcity_prop, standardized=True
         A_Sigma_A_h = A[h] @ Sigma @ A[h].T
         A_Sigma_A.append(A_Sigma_A_h)
     
-    # Numerator: cumulative sum of Sigma_A
-    num = np.cumsum(Sigma_A, axis=0)
-    
-    # Denominator: cumulative sum of A_Sigma_A
-    den = np.cumsum(A_Sigma_A, axis=0)
-    
-    # Generalized FEVD
-    gfevd = np.array([num[h] / np.diag(den[h])[:, None] for h in range(horizon)])
-    
-    if standardized:
-        # Standardize each FEVD matrix so that each row sums to 1
-        gfevd = np.array([fevd / fevd.sum(axis=1, keepdims=True) for fevd in gfevd])
+    # Compute GFEVD
+    gfevd = []
+    for h in range(horizon):
+        # Compute GFEVD for horizon h
+        gfevd_h = np.zeros_like(Sigma_A[0])
+        for i in range(h + 1):
+            gfevd_h += Sigma_A[i] / np.diag(A_Sigma_A[i])[:, np.newaxis]
+        gfevd_h /= (h + 1)
+        gfevd.append(gfevd_h)
     
     # Aggregate results over n_ahead steps
     spillover_matrix = gfevd[-1]
     
     # VSP from row to column so can be used as adjacency matrix
-    spillover_matrix = spillover_matrix.T ## row --> column: if node i --> node j, A_{ij} != 0
+    spillover_matrix = spillover_matrix.T  # row --> column: if node i --> node j, A_{ij} != 0
     
     # Convert to percentage
     spillover_matrix *= 100      
@@ -70,26 +81,4 @@ def compute_spillover_index(data, horizon, lag, scarcity_prop, standardized=True
         vsp_np_sparse = vsp_np_sparse / K
         return vsp_np_sparse
     else:
-        return vsp_np_sparse # for each train_x batch, dim(results_array) = [num_node, num_node]
-
-def save_model(name, model, num_L = None, best_loss_val = None):
-    if not os.path.exists('models/'):
-            os.makedirs('models/')
-    # Prepare the model state dictionary
-    config = {
-        'model_state_dict': model.state_dict(),
-        'layer': num_L,
-        'loss': best_loss_val
-    }
-    # Save the model state dictionary
-    torch.save(config, f'models/{name}.tar')
-    return
-
-def load_model(name, model):
-    checkpoint = torch.load(f'models/{name}.tar', map_location='cpu')
-    model.load_state_dict(checkpoint['model_state_dict'])
-    num_L = checkpoint['layer']
-    mae_loss = checkpoint['loss']
-    print(f"Loaded model: {name}")
-    print(f"MAE loss: {mae_loss}")
-    return model, mae_loss
+        return vsp_np_sparse  # for each train_x batch, dim(results_array) = [num_node, num_node]
