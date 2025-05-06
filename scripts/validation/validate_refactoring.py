@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 # Import from refactored modules
 from config import settings
 from src.data import load_data, split_data, create_lagged_features, prepare_data_dict, create_dataloaders
+from src.data import LegacyGSPHAR_Dataset
 from src.models import GSPHAR
 from src.training import GSPHARTrainer
 from src.utils import compute_spillover_index, load_model

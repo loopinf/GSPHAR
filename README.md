@@ -17,6 +17,17 @@ The code corresponds to the following research article: Chi, Z., Gao, J., & Wang
 
 ```bash
 GSPHAR/
+├── benchmarks/             # Performance benchmark scripts
+│   ├── benchmark_devices.py
+│   ├── benchmark_inference.py
+│   ├── benchmark_tensor_ops.py
+│   ├── simple_mps_test.py
+│   └── test_gsphar_mps.py
+├── bin/                    # Executable scripts
+│   ├── benchmark_all.sh    # Run all benchmarks
+│   ├── commit_changes.sh   # Commit changes to git
+│   ├── run_gsphar.sh       # Run GSPHAR with default settings
+│   └── validate_all.sh     # Run all validation tests
 ├── config/                 # Configuration settings
 │   ├── __init__.py
 │   └── settings.py
@@ -24,9 +35,13 @@ GSPHAR/
 │   └── rv5_sqrt_24.csv
 ├── models/                 # Saved model files
 ├── notebooks/              # Jupyter notebooks (including original implementation)
+├── results/                # Results directory for outputs
 ├── scripts/                # Entry point scripts
 │   ├── train.py            # Training script
 │   ├── inference.py        # Inference script
+│   ├── utils/              # Utility scripts
+│   │   ├── compare_models.py  # Compare model implementations
+│   │   └── run_on_cpu.py   # Run model on CPU
 │   └── validation/         # Validation scripts
 │       └── validate_refactoring.py  # Compare implementations
 ├── src/                    # Source code
@@ -37,7 +52,6 @@ GSPHAR/
 ├── tests/                  # Unit tests
 ├── tmp/                    # Original implementation for validation
 │   └── d_GSPHAR.py         # Original GSPHAR implementation
-├── results/                # Results directory for outputs
 ├── .gitignore
 ├── LICENSE
 ├── README.md
@@ -150,3 +164,27 @@ python cleanup.py
 ```
 
 This script will remove redundant utility files in the `src/` directory that have been replaced by their counterparts in the appropriate subdirectories.
+
+### Executable Scripts
+
+The `bin/` directory contains executable scripts that provide convenient shortcuts for common tasks:
+
+```bash
+# Make scripts executable (if needed)
+chmod +x bin/*.sh
+
+# Run GSPHAR with default settings
+./bin/run_gsphar.sh
+
+# Run all benchmarks
+./bin/benchmark_all.sh
+
+# Run all validation tests
+./bin/validate_all.sh
+```
+
+You can also add the `bin` directory to your PATH to run the scripts from anywhere:
+
+```bash
+export PATH=$PATH:/path/to/GSPHAR/bin
+```
