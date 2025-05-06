@@ -13,6 +13,7 @@ def main():
     print("This script will remove redundant files while preserving validation functionality.")
     print("The following files will be removed:")
     print("  - Redundant utility files in the src directory")
+    print("  - Any remaining files in the root directory that have been moved to benchmarks/, scripts/utils/, or bin/")
 
     # Ask for confirmation
     response = input("Are you sure you want to proceed? (y/n): ")
@@ -30,6 +31,15 @@ def main():
         # These test files have been moved to the tests directory
         'test_model.py',
         'test_train.py',
+        # These files have been moved to benchmarks/ or scripts/utils/
+        'benchmark_devices.py',
+        'benchmark_inference.py',
+        'benchmark_tensor_ops.py',
+        'simple_mps_test.py',
+        'test_gsphar_mps.py',
+        'compare_models.py',
+        'run_on_cpu.py',
+        'commit_changes.sh',
     ]
 
     # Remove files

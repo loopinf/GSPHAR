@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 # Import from local modules
-from src.data.dataset import GSPHAR_Dataset
+from src.data.dataset import LegacyGSPHAR_Dataset, GSPHAR_Dataset
 
 
 def load_data(filepath):
@@ -174,7 +174,7 @@ def prepare_data_dict(df, market_indices, look_back_window):
 
 def create_dataloaders(train_dict, test_dict, batch_size):
     """
-    Create DataLoader instances for training and testing.
+    Create DataLoader instances for training and testing using the legacy dictionary format.
 
     Args:
         train_dict (dict): Training data dictionary.
@@ -183,10 +183,54 @@ def create_dataloaders(train_dict, test_dict, batch_size):
 
     Returns:
         tuple: (dataloader_train, dataloader_test)
+
+    Note:
+        This function uses LegacyGSPHAR_Dataset for backward compatibility.
+        For new code, consider using create_dataloaders_direct with DataFrames.
     """
-    dataset_train = GSPHAR_Dataset(train_dict)
-    dataset_test = GSPHAR_Dataset(test_dict)
+    dataset_train = LegacyGSPHAR_Dataset(train_dict)
+    dataset_test = LegacyGSPHAR_Dataset(test_dict)
 
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     dataloader_test = DataLoader(dataset_test, batch_size=batch_size, shuffle=False)
+    return dataloader_train, dataloader_test
+
+
+def create_dataloaders_direct(train_df, test_df, market_indices, batch_size, look_back_window=22):
+    """
+    Create DataLoader instances for training and testing directly from DataFrames.
+
+    This function uses the improved GSPHAR_Dataset implementation that works directly
+    with DataFrames without requiring an intermediate dictionary structure.
+
+    Args:
+        train_df (pd.DataFrame): Training dataframe with lagged features.
+        test_df (pd.DataFrame): Testing dataframe with lagged features.
+        market_indices (list): List of market indices.
+        batch_size (int): Batch size.
+        look_back_window (int, optional): Number of lagged observations. Defaults to 22.
+
+    Returns:
+        tuple: (dataloader_train, dataloader_test)
+    """
+    # Define column groups
+    y_columns = [col for col in market_indices if col in train_df.columns]
+    columns_lag1 = [x for x in train_df.columns if x.endswith('_1')]
+    columns_lag5 = [x for x in train_df.columns if '_' in x and x.split('_')[-1].isdigit()
+                   and int(x.split('_')[-1]) in range(1, 6)]
+    columns_lag22 = [x for x in train_df.columns if '_' in x and x.split('_')[-1].isdigit()
+                    and int(x.split('_')[-1]) in range(1, look_back_window + 1)]
+
+    # Create datasets
+    dataset_train = GSPHAR_Dataset(
+        train_df, y_columns, columns_lag1, columns_lag5, columns_lag22, market_indices
+    )
+    dataset_test = GSPHAR_Dataset(
+        test_df, y_columns, columns_lag1, columns_lag5, columns_lag22, market_indices
+    )
+
+    # Create dataloaders
+    dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
+    dataloader_test = DataLoader(dataset_test, batch_size=batch_size, shuffle=False)
+
     return dataloader_train, dataloader_test
