@@ -41,8 +41,8 @@ def main():
 
     # Configuration
     data_file = 'data/rv5_sqrt_24.csv'
-    model_file = 'dual_dataset_example_h5'  # Pre-trained model file
-    h = 5  # Prediction horizon
+    model_file = 'GSPHAR_24_magnet_dynamic_h1_best_val0.1631'  # Pre-trained model file
+    h = 1  # Prediction horizon
     look_back_window = 22  # Look-back window
     train_ratio = 0.7  # Train/test split ratio
     batch_size = 32  # Batch size
