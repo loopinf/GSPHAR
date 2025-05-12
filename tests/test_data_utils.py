@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 
 # Import functions to be tested
-from data_utils import (
+from src.data import (
     load_data,
     split_data,
     create_lagged_features,
@@ -148,8 +148,8 @@ def test_prepare_data_dict(sample_raw_data, sample_config):
 
 def test_create_dataloaders(sample_raw_data, sample_config, monkeypatch):
     """Test creating dataloaders."""
-    # Mock the GSPHAR_Dataset class within data_utils
-    monkeypatch.setattr("data_utils.GSPHAR_Dataset", MockGSPHARDataset)
+    # Mock the GSPHAR_Dataset class within src.data
+    monkeypatch.setattr("src.data.GSPHAR_Dataset", MockGSPHARDataset)
 
     h = sample_config['h']
     look_back = sample_config['look_back_window']
