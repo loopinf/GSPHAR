@@ -16,6 +16,7 @@ import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import argparse
 from torch.utils.data import DataLoader
 
 # Add the parent directory to the path
@@ -34,18 +35,41 @@ from src.utils import compute_spillover_index, load_model
 from src.utils.device_utils import get_device, set_device_seeds
 
 
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Evaluate a GSPHAR model with date awareness.')
+    parser.add_argument('--data-file', type=str, default='data/rv5_sqrt_24.csv',
+                        help='Path to the data file.')
+    parser.add_argument('--model', type=str, default='GSPHAR_24_magnet_dynamic_h1_latest_best',
+                        help='Name of the pre-trained model to load.')
+    parser.add_argument('--horizon', type=int, default=1,
+                        help='Prediction horizon.')
+    parser.add_argument('--look-back', type=int, default=22,
+                        help='Look-back window size.')
+    parser.add_argument('--train-split', type=float, default=0.7,
+                        help='Ratio for train/test split.')
+    parser.add_argument('--batch-size', type=int, default=32,
+                        help='Batch size.')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Random seed.')
+    return parser.parse_args()
+
+
 def main():
     """Main function demonstrating date-aware evaluation."""
-    # Set random seeds for reproducibility
-    set_device_seeds(42)
+    # Parse arguments
+    args = parse_args()
 
-    # Configuration
-    data_file = 'data/rv5_sqrt_24.csv'
-    model_file = 'GSPHAR_24_magnet_dynamic_h1_best_val0.1631'  # Pre-trained model file
-    h = 1  # Prediction horizon
-    look_back_window = 22  # Look-back window
-    train_ratio = 0.7  # Train/test split ratio
-    batch_size = 32  # Batch size
+    # Set random seeds for reproducibility
+    set_device_seeds(args.seed)
+
+    # Configuration from arguments
+    data_file = args.data_file
+    model_file = args.model
+    h = args.horizon
+    look_back_window = args.look_back
+    train_ratio = args.train_split
+    batch_size = args.batch_size
 
     # Load data
     print(f"Loading data from {data_file}...")
@@ -154,7 +178,10 @@ def main():
 
     # Save the plot
     os.makedirs('plots', exist_ok=True)
-    plot_file = f'plots/date_aware_predictions_{sample_index}.png'
+    # Use model name and horizon in the plot filename
+    model_short_name = os.path.basename(model_file).split('_')[0:3]  # Take first 3 parts of model name
+    model_short_name = '_'.join(model_short_name)
+    plot_file = f'plots/date_aware_predictions_h{h}_{model_short_name}_{sample_index}.png'
     plt.savefig(plot_file)
     print(f"Plot saved to {plot_file}")
 

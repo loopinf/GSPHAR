@@ -152,9 +152,13 @@ def main():
     # Create a final model name with validation loss
     final_model_name = f"{base_model_name}_best_val{best_loss_val:.4f}"
 
+    # Create a "latest_best" model name that's easy to reference
+    latest_best_name = f"{base_model_name}_latest_best"
+
     # Rename the model file to include validation loss
     model_path = os.path.join(settings.MODEL_DIR, f"{model_save_name}.pt")
     final_model_path = os.path.join(settings.MODEL_DIR, f"{final_model_name}.pt")
+    latest_best_path = os.path.join(settings.MODEL_DIR, f"{latest_best_name}.pt")
 
     # Check for both .pt and .tar extensions
     if not os.path.exists(model_path):
@@ -162,15 +166,42 @@ def main():
         final_model_path = os.path.join(settings.MODEL_DIR, f"{final_model_name}.pt")  # Still save as .pt
 
     if os.path.exists(model_path):
+        # Copy to the final model name with validation score
         shutil.copy(model_path, final_model_path)
         print(f"Saved best model as: {final_model_name}")
 
-    # Load best model
-    print(f"Loading best model {final_model_name}...")
-    trained_model, mae_loss = load_model(final_model_name, model)
+        # Also copy to the "latest_best" name for easy reference
+        shutil.copy(model_path, latest_best_path)
+        print(f"Also saved as: {latest_best_name} for easy reference")
+
+        # Create a metadata file with information about the best model
+        metadata = {
+            "model_name": final_model_name,
+            "validation_loss": float(best_loss_val),
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "horizon": args.horizon,
+            "filter_size": args.filter_size,
+            "epochs_trained": args.epochs
+        }
+
+        metadata_path = os.path.join(settings.MODEL_DIR, f"{latest_best_name}_metadata.json")
+        with open(metadata_path, 'w') as f:
+            import json
+            json.dump(metadata, f, indent=4)
+
+        print(f"Saved metadata to: {metadata_path}")
+
+    # Load best model using the easy reference name
+    print(f"Loading best model {latest_best_name}...")
+    trained_model, mae_loss = load_model(latest_best_name, model)
 
     print(f"Training completed. Best validation loss: {best_loss_val:.4f}")
-    print(f"Best model saved as: {final_model_name}")
+    print(f"Best model saved as: {latest_best_name} (and as {final_model_name})")
+    print(f"To use this model, simply load '{latest_best_name}'")
+
+    # Print the command to use this model for evaluation
+    print("\nTo evaluate this model, run:")
+    print(f"python examples/date_aware_evaluation.py --model {latest_best_name} --horizon {args.horizon}")
 
 
 if __name__ == '__main__':
