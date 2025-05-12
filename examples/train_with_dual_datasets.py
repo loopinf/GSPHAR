@@ -53,8 +53,8 @@ def main():
     look_back_window = 22  # Look-back window
     train_ratio = 0.7  # Train/test split ratio
     batch_size = 32  # Batch size
-    num_epochs = 100  # Number of epochs
-    patience = 20  # Patience for early stopping
+    num_epochs = 2  # Number of epochs (reduced for demonstration)
+    patience = 1  # Patience for early stopping
     lr = 0.01  # Learning rate
 
     # Load data
@@ -168,8 +168,9 @@ def main():
         scheduler=scheduler
     )
 
-    # Train model
+    # Train model (using minimal epochs for demonstration purposes)
     print(f"Training model for {num_epochs} epochs with patience {patience}...")
+    print("Note: Using minimal epochs for demonstration. Increase for real training.")
     model_save_name = f"dual_dataset_example_h{h}"
     best_loss_val, _, _, train_loss_list, test_loss_list = trainer.train(
         dataloader_train=train_dataloader,
