@@ -185,10 +185,37 @@ class IndexMappingDataset(Dataset):
 
         # Create lagged features and targets
         for i in range(max_lag, n_samples - self.h + 1):
-            # Create lagged features
+            # Create lagged features with the correct shapes for GSPHAR model
+            # x_lag1 should be [filter_size, 1]
+            # x_lag5 should be [filter_size, 5]
+            # x_lag22 should be [filter_size, 22]
+
+            # For x_lag1, we need just the previous day's data
             x_lag1_i = torch.tensor(self.data.iloc[i-1:i].values, dtype=torch.float32, device=self.device)
-            x_lag5_i = torch.tensor(self.data.iloc[i-5:i].values, dtype=torch.float32, device=self.device)
-            x_lag22_i = torch.tensor(self.data.iloc[i-22:i].values, dtype=torch.float32, device=self.device)
+            # Reshape to [filter_size, 1]
+            x_lag1_i = x_lag1_i.reshape(n_features, 1)
+
+            # For x_lag5, we need 5 days of data
+            # Ensure we have exactly 5 days by padding if necessary
+            lag5_start = max(0, i-5)
+            lag5_data = self.data.iloc[lag5_start:i].values
+            # Pad if we don't have enough data
+            if lag5_data.shape[0] < 5:
+                pad_size = 5 - lag5_data.shape[0]
+                lag5_data = np.pad(lag5_data, ((pad_size, 0), (0, 0)), mode='edge')
+            # Transpose to get [filter_size, 5]
+            x_lag5_i = torch.tensor(lag5_data.T, dtype=torch.float32, device=self.device)
+
+            # For x_lag22, we need 22 days of data
+            # Ensure we have exactly 22 days by padding if necessary
+            lag22_start = max(0, i-22)
+            lag22_data = self.data.iloc[lag22_start:i].values
+            # Pad if we don't have enough data
+            if lag22_data.shape[0] < 22:
+                pad_size = 22 - lag22_data.shape[0]
+                lag22_data = np.pad(lag22_data, ((pad_size, 0), (0, 0)), mode='edge')
+            # Transpose to get [filter_size, 22]
+            x_lag22_i = torch.tensor(lag22_data.T, dtype=torch.float32, device=self.device)
 
             # Create target
             y_i = torch.tensor(self.data.iloc[i:i+self.h].values, dtype=torch.float32, device=self.device)
