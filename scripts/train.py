@@ -23,6 +23,7 @@ from src.models import GSPHAR
 from src.training import GSPHARTrainer
 from src.utils import compute_spillover_index, load_model, save_model
 from src.utils.device_utils import set_device_seeds
+from src.training.custom_losses import WeightedMSELoss, AsymmetricMSELoss, ThresholdMSELoss, HybridLoss
 import glob
 import re
 import json
@@ -70,6 +71,26 @@ def parse_args():
                         help='Find the best model based on validation loss.')
     parser.add_argument('--tag', type=str, default=None,
                         help='Add a custom tag to the model name.')
+
+    # Custom loss function arguments
+    parser.add_argument('--loss-fn', type=str, default='mse',
+                        choices=['mse', 'weighted_mse', 'asymmetric_mse', 'threshold_mse', 'hybrid'],
+                        help='Loss function to use for training.')
+    parser.add_argument('--threshold', type=float, default=0.5,
+                        help='Threshold for weighted and threshold loss functions.')
+    parser.add_argument('--weight-factor', type=float, default=5.0,
+                        help='Weight factor for weighted loss function.')
+    parser.add_argument('--under-prediction-factor', type=float, default=3.0,
+                        help='Under-prediction factor for asymmetric loss function.')
+    parser.add_argument('--thresholds', type=str, default='0.2,0.5,1.0',
+                        help='Comma-separated list of thresholds for threshold loss function.')
+    parser.add_argument('--weights', type=str, default='1.0,2.0,5.0,10.0',
+                        help='Comma-separated list of weights for threshold loss function.')
+    parser.add_argument('--mse-weight', type=float, default=1.0,
+                        help='Weight for MSE component in hybrid loss function.')
+    parser.add_argument('--large-jump-weight', type=float, default=2.0,
+                        help='Weight for large jump component in hybrid loss function.')
+
     return parser.parse_args()
 
 
@@ -339,10 +360,39 @@ def main():
     device = 'cpu'
     print(f"Using device: {device} (MPS/GPU disabled as requested)")
 
+    # Select loss function based on arguments
+    if args.loss_fn == 'mse':
+        criterion = nn.MSELoss()
+        print("Using standard MSE loss")
+    elif args.loss_fn == 'weighted_mse':
+        criterion = WeightedMSELoss(threshold=args.threshold, weight_factor=args.weight_factor)
+        print(f"Using weighted MSE loss with threshold={args.threshold}, weight_factor={args.weight_factor}")
+    elif args.loss_fn == 'asymmetric_mse':
+        criterion = AsymmetricMSELoss(under_prediction_factor=args.under_prediction_factor)
+        print(f"Using asymmetric MSE loss with under_prediction_factor={args.under_prediction_factor}")
+    elif args.loss_fn == 'threshold_mse':
+        # Parse thresholds and weights from strings
+        thresholds = [float(t) for t in args.thresholds.split(',')]
+        weights = [float(w) for w in args.weights.split(',')]
+        criterion = ThresholdMSELoss(thresholds=thresholds, weights=weights)
+        print(f"Using threshold MSE loss with thresholds={thresholds}, weights={weights}")
+    elif args.loss_fn == 'hybrid':
+        criterion = HybridLoss(
+            mse_weight=args.mse_weight,
+            large_jump_weight=args.large_jump_weight,
+            threshold=args.threshold,
+            jump_factor=args.weight_factor
+        )
+        print(f"Using hybrid loss with mse_weight={args.mse_weight}, large_jump_weight={args.large_jump_weight}, "
+              f"threshold={args.threshold}, jump_factor={args.weight_factor}")
+    else:
+        criterion = nn.MSELoss()
+        print("Using default MSE loss")
+
     trainer = GSPHARTrainer(
         model=model,
         device=device,
-        criterion=nn.MSELoss(),
+        criterion=criterion,
         optimizer=optimizer,
         scheduler=scheduler
     )
@@ -356,6 +406,10 @@ def main():
         filter_size=args.filter_size,
         h=args.horizon
     )
+
+    # Add loss function info to the model name
+    if args.loss_fn != 'mse':
+        base_model_name = f"{base_model_name}_{args.loss_fn}"
 
     # Add tag if provided
     if args.tag:
@@ -438,7 +492,18 @@ def main():
             "patience": args.patience,
             "input_dim": args.input_dim,
             "output_dim": args.output_dim,
-            "look_back": args.look_back
+            "look_back": args.look_back,
+            # Loss function information
+            "loss_function": args.loss_fn,
+            "loss_function_params": {
+                "threshold": args.threshold if args.loss_fn in ['weighted_mse', 'hybrid'] else None,
+                "weight_factor": args.weight_factor if args.loss_fn in ['weighted_mse', 'hybrid'] else None,
+                "under_prediction_factor": args.under_prediction_factor if args.loss_fn == 'asymmetric_mse' else None,
+                "thresholds": [float(t) for t in args.thresholds.split(',')] if args.loss_fn == 'threshold_mse' else None,
+                "weights": [float(w) for w in args.weights.split(',')] if args.loss_fn == 'threshold_mse' else None,
+                "mse_weight": args.mse_weight if args.loss_fn == 'hybrid' else None,
+                "large_jump_weight": args.large_jump_weight if args.loss_fn == 'hybrid' else None
+            }
         }
 
         metadata_path = os.path.join(settings.MODEL_DIR, f"{latest_best_name}_metadata.json")
