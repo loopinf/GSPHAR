@@ -9,7 +9,7 @@ import os
 # Add the parent directory to the path to import from the src package
 sys.path.insert(0, os.path.abspath('..'))
 
-from src.utils.date_aware_dataset import IndexMappingDataset, create_index_mapping_dataloaders, generate_index_mapped_predictions
+from src.data import IndexMappingDataset, create_index_mapping_dataloaders, generate_index_mapped_predictions
 
 class TestIndexMappingDataset(unittest.TestCase):
     def setUp(self):

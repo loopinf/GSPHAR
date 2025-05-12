@@ -12,4 +12,11 @@ from src.data.data_utils import (
     create_dataloaders_direct
 )
 
-from src.data.dataset import GSPHAR_Dataset, LegacyGSPHAR_Dataset, NewGSPHAR_Dataset
+from src.data.dataset import (
+    GSPHAR_Dataset,
+    LegacyGSPHAR_Dataset,
+    NewGSPHAR_Dataset,
+    IndexMappingDataset,
+    create_index_mapping_dataloaders,
+    generate_index_mapped_predictions
+)
