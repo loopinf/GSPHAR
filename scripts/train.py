@@ -109,10 +109,13 @@ def find_best_model(pattern, horizon=None):
         # Try to extract validation loss from filename
         match = re.search(r'val([0-9.]+)', model_file)
         if match:
-            loss = float(match.group(1))
-            if loss < best_loss:
-                best_loss = loss
-                best_model = os.path.basename(model_file).replace('.pt', '')
+            try:
+                loss = float(match.group(1))
+                if loss < best_loss:
+                    best_loss = loss
+                    best_model = os.path.basename(model_file).replace('.pt', '')
+            except ValueError:
+                print(f"Warning: Could not parse validation loss from {model_file}")
 
     return best_model, best_loss
 
@@ -152,7 +155,10 @@ def print_model_summary(pattern, horizon=None):
         loss = None
         match = re.search(r'val([0-9.]+)', model_file)
         if match:
-            loss = float(match.group(1))
+            try:
+                loss = float(match.group(1))
+            except ValueError:
+                print(f"Warning: Could not parse validation loss from {model_file}")
 
         # Try to get additional info from metadata
         metadata_file = os.path.join(model_dir, f"{model_name}_metadata.json")
