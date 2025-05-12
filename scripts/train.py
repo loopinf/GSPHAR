@@ -170,9 +170,14 @@ def main():
         shutil.copy(model_path, final_model_path)
         print(f"Saved best model as: {final_model_name}")
 
-        # Also copy to the "latest_best" name for easy reference
-        shutil.copy(model_path, latest_best_path)
-        print(f"Also saved as: {latest_best_name} for easy reference")
+        # Create a symlink for "latest_best" that points to the final model
+        # Remove existing symlink if it exists
+        if os.path.exists(latest_best_path) or os.path.islink(latest_best_path):
+            os.remove(latest_best_path)
+
+        # Create a relative symlink
+        os.symlink(os.path.basename(final_model_path), latest_best_path)
+        print(f"Created symlink: {latest_best_name} -> {os.path.basename(final_model_path)}")
 
         # Create a metadata file with information about the best model
         metadata = {
