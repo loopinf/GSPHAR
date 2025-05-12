@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # Import from local modules
 from src.data import load_data, split_data
-from src.utils.date_aware_dataset import IndexMappingDataset
+from src.data import IndexMappingDataset
 
 def main():
     """Main function to demonstrate the date-aware dataset functionality."""
