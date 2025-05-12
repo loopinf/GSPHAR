@@ -107,7 +107,7 @@ def find_best_model(pattern, horizon=None):
             continue
 
         # Try to extract validation loss from filename
-        match = re.search(r'val([0-9.]+)', model_file)
+        match = re.search(r'val([0-9]+\.[0-9]+)', model_file)
         if match:
             try:
                 loss = float(match.group(1))
@@ -153,7 +153,7 @@ def print_model_summary(pattern, horizon=None):
 
         # Try to extract validation loss from filename
         loss = None
-        match = re.search(r'val([0-9.]+)', model_file)
+        match = re.search(r'val([0-9]+\.[0-9]+)', model_file)
         if match:
             try:
                 loss = float(match.group(1))
