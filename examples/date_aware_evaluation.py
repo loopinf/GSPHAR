@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import argparse
+import datetime
 from torch.utils.data import DataLoader
 
 # Add the parent directory to the path
@@ -178,12 +179,36 @@ def main():
 
     # Save the plot
     os.makedirs('plots', exist_ok=True)
-    # Use model name and horizon in the plot filename
+
+    # Get metadata if available
+    metadata_path = os.path.join(settings.MODEL_DIR, f"{model_file}_metadata.json")
+    epochs_info = ""
+    val_loss_info = ""
+    timestamp_info = datetime.datetime.now().strftime("%Y%m%d")
+
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, 'r') as f:
+                import json
+                metadata = json.load(f)
+                epochs_info = f"_e{metadata.get('epochs_trained', 'unknown')}"
+                val_loss_info = f"_val{metadata.get('validation_loss', 0):.4f}"
+                if 'timestamp' in metadata:
+                    timestamp = datetime.datetime.strptime(
+                        metadata['timestamp'], "%Y-%m-%d %H:%M:%S"
+                    )
+                    timestamp_info = timestamp.strftime("%Y%m%d")
+        except:
+            pass
+
+    # Use detailed information in the plot filename
     model_short_name = os.path.basename(model_file).split('_')[0:3]  # Take first 3 parts of model name
     model_short_name = '_'.join(model_short_name)
-    plot_file = f'plots/date_aware_predictions_h{h}_{model_short_name}_{sample_index}.png'
+
+    plot_file = f'plots/predictions_h{h}{epochs_info}{val_loss_info}_{timestamp_info}_{sample_index}.png'
     plt.savefig(plot_file)
     print(f"Plot saved to {plot_file}")
+    print("Note: Plots are not automatically committed to the repository.")
 
     print("\nDone!")
 
