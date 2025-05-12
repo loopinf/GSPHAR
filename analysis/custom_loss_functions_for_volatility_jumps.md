@@ -173,6 +173,27 @@ To facilitate direct comparison between all models for each market index, we cre
 
 These visualizations make it easier to compare how each model performs on the same market index, particularly during large volatility events.
 
+#### Example Visualization
+
+![FCHI Index Model Comparison](../plots/all_models_comparison_.FCHI_20250513_003927.png)
+
+*Figure: Comparison of all models for the FCHI index (French CAC 40). The top panel shows predictions across the entire test period, while the bottom panel focuses on large jump events (values > 1.0).*
+
+#### Script for Generating Comparisons
+
+The script for generating these comparisons is available at `examples/compare_all_models.py`. It can be run as follows:
+
+```bash
+python examples/compare_all_models.py \
+  --standard-model GSPHAR_24_magnet_dynamic_h1_standard_mse_10epochs_latest_best \
+  --asymmetric-model GSPHAR_24_magnet_dynamic_h1_asymmetric_mse_asymmetric_mse_10epochs_latest_best \
+  --hybrid-model GSPHAR_24_magnet_dynamic_h1_hybrid_hybrid_10epochs_latest_best \
+  --weighted-model GSPHAR_24_magnet_dynamic_h1_weighted_mse_weighted_mse_10epochs_latest_best \
+  --threshold 1.0
+```
+
+This script loads all models, makes predictions on the test set, and generates comparison plots for all 24 market indices.
+
 ## Key Findings
 
 1. **Trade-off between overall accuracy and large jump accuracy**:
@@ -243,6 +264,18 @@ These visualizations make it easier to compare how each model performs on the sa
    - Implement adaptive loss functions that adjust their behavior based on market conditions
    - Consider a staged training approach: start with custom loss functions and gradually transition to standard MSE
    - Use the `compare_all_models.py` script to generate comprehensive visualizations that compare all models for each market index
+
+     ```bash
+     # Example usage of the comparison script
+     python examples/compare_all_models.py \
+       --standard-model <standard_model_name> \
+       --asymmetric-model <asymmetric_model_name> \
+       --hybrid-model <hybrid_model_name> \
+       --weighted-model <weighted_model_name> \
+       --threshold 1.0
+     ```
+
+   - The script generates plots for all 24 market indices, showing both overall performance and focused views of large jump events
 
 5. **Further Research**:
    - Investigate market-specific loss functions tailored to the characteristics of each index
