@@ -31,23 +31,23 @@ class GSPHAR(nn.Module):
         )
         self.linear_output_real = nn.Linear(input_dim, output_dim, bias=True)
         self.linear_output_imag = nn.Linear(input_dim, output_dim, bias=True)
-    
+
     def nomalized_magnet_laplacian(self, A, q, norm=True):
         A_s = (A + A.T) / 2
         D_s = np.diag(np.sum(A_s, axis=1))
         pi = np.pi
         theta_q = 2 * pi * q * (A - A.T)
         H_q = A_s * np.exp(1j * theta_q)
-        
+
         if norm:
             D_s_inv = np.linalg.inv(D_s)
             D_s_inv_sqrt = sqrtm(D_s_inv)
             L = np.eye(len(D_s)) - (D_s_inv_sqrt @ A_s @ D_s_inv_sqrt) * np.exp(1j * theta_q)
         else:
             L = D_s - H_q
-            
+
         return L
-    
+
     def dynamic_magnet_Laplacian(self, A, x_lag_p, x_lag_q):
         A = (A - A.T)
         A[A < 0] = 0
@@ -119,7 +119,7 @@ class GSPHAR(nn.Module):
         U = torch.stack(U_list)
 
         return U_dega, U
-    
+
     def forward(self, x_lag1, x_lag5, x_lag22):
         # Ensure all items are on the same device as the input x
         device = x_lag1.device
@@ -141,9 +141,35 @@ class GSPHAR(nn.Module):
         x_lag22 = torch.complex(x_lag22, torch.zeros_like(x_lag22))
 
         # Transform to spectral domain
-        x_lag1_spectral = torch.matmul(U_dega, x_lag1.unsqueeze(-1))
-        x_lag5_spectral = torch.matmul(U_dega, x_lag5)
-        x_lag22_spectral = torch.matmul(U_dega, x_lag22)
+        # Process each batch item separately
+        batch_size = x_lag1.shape[0]
+        x_lag1_spectral_list = []
+        x_lag5_spectral_list = []
+        x_lag22_spectral_list = []
+
+        for i in range(batch_size):
+            # For each batch, get the corresponding eigenvectors
+            U_dega_i = U_dega[i]  # Shape: [filter_size, filter_size]
+
+            # Get the corresponding input tensors
+            x_lag1_i = x_lag1[i]  # Shape: [filter_size, 1]
+            x_lag5_i = x_lag5[i]  # Shape: [filter_size, 5]
+            x_lag22_i = x_lag22[i]  # Shape: [filter_size, 22]
+
+            # Perform the matrix multiplication
+            x_lag1_spectral_i = torch.matmul(U_dega_i, x_lag1_i)  # Shape: [filter_size, 1]
+            x_lag5_spectral_i = torch.matmul(U_dega_i, x_lag5_i)  # Shape: [filter_size, 5]
+            x_lag22_spectral_i = torch.matmul(U_dega_i, x_lag22_i)  # Shape: [filter_size, 22]
+
+            # Append to the lists
+            x_lag1_spectral_list.append(x_lag1_spectral_i)
+            x_lag5_spectral_list.append(x_lag5_spectral_i)
+            x_lag22_spectral_list.append(x_lag22_spectral_i)
+
+        # Stack the results to get tensors of shape [batch_size, filter_size, sequence_length]
+        x_lag1_spectral = torch.stack(x_lag1_spectral_list)
+        x_lag5_spectral = torch.stack(x_lag5_spectral_list)
+        x_lag22_spectral = torch.stack(x_lag22_spectral_list)
 
         # Apply 1D convolution to lag5 and lag22
         # Reshape to match the expected input shape for Conv1d
@@ -185,7 +211,7 @@ class GSPHAR(nn.Module):
             x_lag5_conv_squeezed,
             x_lag22_conv_squeezed
         ], dim=-1)
-        
+
         # Apply linear transformation separately to the real and imaginary parts
         y_hat_real = self.linear_output_real(lagged_rv_spectral.real)
         y_hat_imag = self.linear_output_imag(lagged_rv_spectral.imag)
@@ -198,10 +224,10 @@ class GSPHAR(nn.Module):
         y_hat_imag = y_hat.imag # [batch_size, num_markets, 1]
         y_hat_real = y_hat_real.squeeze(-1)
         y_hat_imag = y_hat_imag.squeeze(-1)
-        
+
         y_hat_spatial = torch.stack((y_hat_real, y_hat_imag), dim=-1)
-        
+
         # Apply linear transformation separately to the real and imaginary parts
         y_hat = self.spatial_process(y_hat_spatial)
-        
+
         return y_hat.squeeze(-1), softmax_param_5, softmax_param_22
