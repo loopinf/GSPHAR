@@ -133,7 +133,8 @@ class GSPHARTrainer:
         valid_loss /= len(dataloader)
         return valid_loss, conv1d_lag5_weights, conv1d_lag22_weights
 
-    def train(self, dataloader_train, dataloader_test, num_epochs, patience, model_save_name, learning_rate=0.01):
+    def train(self, dataloader_train, dataloader_test, num_epochs, patience, model_save_name,
+             learning_rate=0.01, start_epoch=0, best_loss=None):
         """
         Train the model.
 
@@ -144,11 +145,13 @@ class GSPHARTrainer:
             patience (int): Patience for early stopping.
             model_save_name (str): Name for saving the model.
             learning_rate (float, optional): Learning rate for the scheduler if not provided. Defaults to 0.01.
+            start_epoch (int, optional): Starting epoch for resuming training. Defaults to 0.
+            best_loss (float, optional): Best validation loss for resuming training. Defaults to None.
 
         Returns:
             tuple: (best_loss_val, final_conv1d_lag5_weights, final_conv1d_lag22_weights, train_loss_list, test_loss_list)
         """
-        best_loss_val = float('inf')
+        best_loss_val = float('inf') if best_loss is None else best_loss
         current_patience = 0
         train_loss_list = []
         test_loss_list = []
@@ -168,6 +171,9 @@ class GSPHARTrainer:
         # Use tqdm for progress tracking
         with tqdm(range(num_epochs), desc="Epochs") as pbar:
             for epoch in pbar:
+                # Calculate the actual epoch number (for display)
+                actual_epoch = start_epoch + epoch + 1
+
                 # Train for one epoch
                 train_loss = self.train_epoch(dataloader_train)
                 train_loss_list.append(train_loss)
@@ -188,11 +194,11 @@ class GSPHARTrainer:
 
                     # Save the model
                     save_model(model_save_name, self.model, None, best_loss_val)
-                    tqdm.write(f"Epoch {epoch+1}: Validation loss improved to {best_loss_val:.4f}. Saving model.")
+                    tqdm.write(f"Epoch {actual_epoch}: Validation loss improved to {best_loss_val:.4f}. Saving model.")
                 else:
                     current_patience += 1
                     if current_patience >= patience:
-                        tqdm.write(f'Early stopping at epoch {epoch+1}.')
+                        tqdm.write(f'Early stopping at epoch {actual_epoch}.')
                         break
 
         return best_loss_val, final_conv1d_lag5_weights, final_conv1d_lag22_weights, train_loss_list, test_loss_list
