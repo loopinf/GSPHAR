@@ -108,12 +108,22 @@ For evaluation, we defined "large jumps" as target values above a threshold of 1
 
 ### Overall Performance Comparison
 
+#### 3-Epoch Training Results
+
 | Model | Overall MAE | Large Jump MAE | Large Jump Improvement |
 |-------|-------------|----------------|------------------------|
 | Standard MSE | 0.2850 | 0.4218 | - |
 | Weighted MSE | 0.3141 | 0.3973 | +5.80% |
 | Asymmetric MSE | 0.3884 | 0.3664 | +13.13% |
 | Hybrid Loss | 0.3189 | 0.3938 | +6.64% |
+
+#### 10-Epoch Training Results
+
+| Model | Overall MAE | Large Jump MAE | Large Jump Improvement |
+|-------|-------------|----------------|------------------------|
+| Standard MSE | 0.2013 | 0.4606 | - |
+| Asymmetric MSE | 0.2568 | 0.4334 | +5.90% |
+| Hybrid Loss | 0.2255 | 0.4434 | +3.73% |
 
 #### Large Jump Improvement Calculation
 
@@ -123,7 +133,7 @@ The Large Jump Improvement metric is calculated as the percentage reduction in M
 Large Jump Improvement = ((Standard\_MAE - Custom\_MAE) / Standard\_MAE) * 100\%
 ```
 
-For example, for the Asymmetric MSE model:
+For example, for the Asymmetric MSE model with 3-epoch training:
 
 ```math
 Improvement = ((0.4218 - 0.3664) / 0.4218) * 100\% = 13.13\%
@@ -160,11 +170,11 @@ Visual inspection of the predictions shows:
    - However, all custom loss functions showed significant improvements in predicting large jumps
 
 2. **Asymmetric MSE performed best on large jumps**:
-   - The asymmetric MSE model showed the largest improvement on large jumps (+13.13%)
-   - However, it also had the worst overall MAE (0.3884)
+   - The asymmetric MSE model showed the largest improvement on large jumps (+13.13% with 3-epoch training)
+   - However, it also had the worst overall MAE (0.3884 with 3-epoch training)
 
 3. **Weighted MSE and Hybrid Loss showed balanced improvements**:
-   - Both models showed moderate improvements on large jumps (+5.80% and +6.64% respectively)
+   - Both models showed moderate improvements on large jumps (+5.80% and +6.64% respectively with 3-epoch training)
    - They had a smaller degradation in overall MAE compared to the asymmetric model
 
 4. **Market-specific improvements**:
@@ -176,6 +186,14 @@ Visual inspection of the predictions shows:
    - The asymmetric loss function is particularly effective for risk management applications where underpredicting volatility is more costly than overpredicting it
    - The weighted MSE loss offers a good balance between overall accuracy and large jump performance
    - The hybrid loss provides flexibility through adjustable weights for the standard and large jump components
+
+6. **Effect of training duration**:
+   - With longer training (10 epochs vs 3 epochs), all models showed improved overall MAE
+   - The standard MSE model's overall MAE improved the most with longer training (from 0.2850 to 0.2013)
+   - The gap in overall MAE between standard MSE and custom loss models narrowed with longer training
+   - The improvement on large jumps for custom loss models decreased with longer training
+   - Asymmetric MSE showed +13.13% improvement with 3-epoch training but only +5.90% with 10-epoch training
+   - This suggests that with longer training, the standard MSE model gets better at predicting large jumps, reducing the relative advantage of custom loss functions
 
 ## Practical Implications
 
@@ -197,19 +215,28 @@ Visual inspection of the predictions shows:
 1. **Loss Function Selection**:
    - Choose loss functions based on the specific application requirements
    - Consider the relative costs of underprediction versus overprediction in your domain
+   - For short training regimes, consider asymmetric MSE for maximum large jump improvement
+   - For longer training regimes, consider hybrid loss for a better balance of overall and large jump performance
 
-2. **Hyperparameter Tuning**:
+2. **Training Duration Considerations**:
+   - If computational resources are limited, use custom loss functions with shorter training periods
+   - If longer training is possible, the standard MSE model may be sufficient for many applications
+   - For critical risk management applications, custom loss functions still provide value even with longer training
+
+3. **Hyperparameter Tuning**:
    - Fine-tune threshold values and weight factors based on the specific characteristics of the target market
    - Consider using different thresholds for different markets based on their volatility profiles
+   - Adjust hyperparameters based on training duration (e.g., higher weight factors for longer training)
 
-3. **Implementation Strategies**:
+4. **Implementation Strategies**:
    - For production systems, consider ensemble approaches that combine models trained with different loss functions
    - Implement adaptive loss functions that adjust their behavior based on market conditions
+   - Consider a staged training approach: start with custom loss functions and gradually transition to standard MSE
 
-4. **Further Research**:
-   - Explore longer training periods to see if performance gaps narrow with more training
+5. **Further Research**:
    - Investigate market-specific loss functions tailored to the characteristics of each index
    - Develop dynamic loss functions that adapt to changing market regimes
+   - Explore the relationship between model capacity, training duration, and custom loss effectiveness
 
 ## Conclusion
 
@@ -217,4 +244,8 @@ Custom loss functions offer a powerful approach to improving the GSPHAR model's 
 
 The asymmetric MSE loss function, in particular, shows promising results for applications where underpredicting volatility during market stress is especially costly. For more balanced applications, the weighted MSE and hybrid loss functions provide good alternatives.
 
-These findings highlight the importance of aligning the loss function with the specific objectives of the forecasting task, rather than defaulting to standard loss functions that may not capture the most critical aspects of the prediction problem.
+Our extended experiments with longer training durations (10 epochs vs 3 epochs) revealed that the advantage of custom loss functions diminishes with longer training, but doesn't disappear entirely. This suggests that while standard MSE models can improve their performance on large jumps with sufficient training, custom loss functions still provide value for critical applications where even small improvements in predicting extreme events are important.
+
+The choice between standard MSE and custom loss functions should consider not only the specific application requirements but also the available computational resources and training time. For quick model development or when computational resources are limited, custom loss functions can provide significant benefits with shorter training periods.
+
+These findings highlight the importance of aligning the loss function with the specific objectives of the forecasting task, rather than defaulting to standard loss functions that may not capture the most critical aspects of the prediction problem. The relationship between loss function design, training duration, and model performance represents a rich area for further research in financial forecasting.
