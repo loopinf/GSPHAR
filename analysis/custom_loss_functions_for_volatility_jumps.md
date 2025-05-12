@@ -163,6 +163,16 @@ Visual inspection of the predictions shows:
 3. The weighted MSE and hybrid models show intermediate behavior
 4. All custom loss models better capture the magnitude of large jumps compared to the standard MSE model
 
+To facilitate direct comparison between all models for each market index, we created comprehensive visualization plots using the `compare_all_models.py` script. These plots show:
+
+1. All four models (Standard MSE, Asymmetric MSE, Hybrid Loss, and Weighted MSE) in a single plot for each market index
+2. Performance across the entire test period in the top panel
+3. Focused view of large jump events in the bottom panel
+4. MAE metrics for large jumps with percentage improvements relative to the standard MSE model
+5. Color-coded lines for easy visual differentiation between models (blue for Standard MSE, red for Asymmetric MSE, green for Hybrid Loss, and purple for Weighted MSE)
+
+These visualizations make it easier to compare how each model performs on the same market index, particularly during large volatility events.
+
 ## Key Findings
 
 1. **Trade-off between overall accuracy and large jump accuracy**:
@@ -232,6 +242,7 @@ Visual inspection of the predictions shows:
    - For production systems, consider ensemble approaches that combine models trained with different loss functions
    - Implement adaptive loss functions that adjust their behavior based on market conditions
    - Consider a staged training approach: start with custom loss functions and gradually transition to standard MSE
+   - Use the `compare_all_models.py` script to generate comprehensive visualizations that compare all models for each market index
 
 5. **Further Research**:
    - Investigate market-specific loss functions tailored to the characteristics of each index
