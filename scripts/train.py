@@ -10,6 +10,8 @@ import torch.optim as optim
 import argparse
 import os
 import sys
+import datetime
+import shutil
 
 # Add the parent directory to the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -124,10 +126,17 @@ def main():
 
     # Train model
     print(f"Training model for {args.epochs} epochs with patience {args.patience}...")
-    model_save_name = settings.MODEL_SAVE_NAME_PATTERN.format(
+
+    # Create a unique model name with timestamp
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_model_name = settings.MODEL_SAVE_NAME_PATTERN.format(
         filter_size=args.filter_size,
         h=args.horizon
     )
+    model_save_name = f"{base_model_name}_{timestamp}"
+
+    print(f"Model will be saved as: {model_save_name}")
+
     best_loss_val, _, _, train_loss_list, test_loss_list = trainer.train(
         dataloader_train=dataloader_train,
         dataloader_test=dataloader_test,
@@ -136,11 +145,28 @@ def main():
         model_save_name=model_save_name
     )
 
+    # Create a final model name with validation loss
+    final_model_name = f"{base_model_name}_best_val{best_loss_val:.4f}"
+
+    # Rename the model file to include validation loss
+    model_path = os.path.join(settings.MODEL_DIR, f"{model_save_name}.pt")
+    final_model_path = os.path.join(settings.MODEL_DIR, f"{final_model_name}.pt")
+
+    # Check for both .pt and .tar extensions
+    if not os.path.exists(model_path):
+        model_path = os.path.join(settings.MODEL_DIR, f"{model_save_name}.tar")
+        final_model_path = os.path.join(settings.MODEL_DIR, f"{final_model_name}.pt")  # Still save as .pt
+
+    if os.path.exists(model_path):
+        shutil.copy(model_path, final_model_path)
+        print(f"Saved best model as: {final_model_name}")
+
     # Load best model
-    print(f"Loading best model {model_save_name}...")
-    trained_model, mae_loss = load_model(model_save_name, model)
+    print(f"Loading best model {final_model_name}...")
+    trained_model, mae_loss = load_model(final_model_name, model)
 
     print(f"Training completed. Best validation loss: {best_loss_val:.4f}")
+    print(f"Best model saved as: {final_model_name}")
 
 
 if __name__ == '__main__':
