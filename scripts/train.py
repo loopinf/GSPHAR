@@ -116,9 +116,13 @@ def main():
     )
 
     # Create trainer
+    # Force CPU usage as requested
+    device = 'cpu'
+    print(f"Using device: {device} (MPS/GPU disabled as requested)")
+
     trainer = GSPHARTrainer(
         model=model,
-        device=args.device,
+        device=device,
         criterion=nn.MSELoss(),
         optimizer=optimizer,
         scheduler=scheduler

@@ -153,12 +153,9 @@ def main():
     )
 
     # Create trainer
-    device = get_device()
-
-    # Force CPU if MPS is detected (to avoid float64 issues)
-    if device == 'mps':
-        print("MPS device detected. Forcing CPU to avoid float64 issues.")
-        device = 'cpu'
+    # Force CPU usage as requested
+    device = 'cpu'
+    print(f"Using device: {device} (MPS/GPU disabled as requested)")
 
     trainer = GSPHARTrainer(
         model=model,
