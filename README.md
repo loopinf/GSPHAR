@@ -3,6 +3,7 @@
 This repository contains the implementation of the Graph Signal Processing for Heterogeneous Autoregressive (GSPHAR) model for global stock market volatility forecasting.
 
 The code corresponds to the following research article: Chi, Z., Gao, J., & Wang, C. (2024). Graph Signal Processing for Global Stock Market Volatility Forecasting. _arXiv preprint arXiv:2410.22706_.
+[arXiv link](https://arxiv.org/abs/2410.22706)
 
 ## Features
 
