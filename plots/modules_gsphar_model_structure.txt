@@ -1,0 +1,12 @@
+Model Modules:
+conv1d_lag5: Conv1d
+conv1d_lag22: Conv1d
+spatial_process: Sequential
+spatial_process.0: Linear
+spatial_process.1: ReLU
+spatial_process.2: Linear
+spatial_process.3: ReLU
+spatial_process.4: Linear
+spatial_process.5: ReLU
+linear_output_real: Linear
+linear_output_imag: Linear

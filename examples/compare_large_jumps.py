@@ -167,6 +167,24 @@ def evaluate_models(model1, model2, dataset, threshold, use_percentile, percenti
     # Calculate performance per market index
     market_indices = dataset.data.columns
 
+    # Print sample predictions and actuals for debugging
+    print("\n=== Sample Predictions and Actuals ===")
+    print("First 5 predictions for first market index:")
+    print(f"Market: {market_indices[0]}")
+    print("Index | Actual  | Model1  | Model2")
+    print("------|---------|---------|--------")
+    for i in range(5):
+        print(f"{i:5d} | {actuals[i, 0]:.6f} | {predictions1[i, 0]:.6f} | {predictions2[i, 0]:.6f}")
+
+    print("\nLast 5 predictions for first market index:")
+    for i in range(len(actuals)-5, len(actuals)):
+        print(f"{i:5d} | {actuals[i, 0]:.6f} | {predictions1[i, 0]:.6f} | {predictions2[i, 0]:.6f}")
+
+    print("\nStatistics for first market index:")
+    print(f"Actuals - Min: {actuals[:, 0].min():.6f}, Max: {actuals[:, 0].max():.6f}, Mean: {actuals[:, 0].mean():.6f}")
+    print(f"Model1  - Min: {predictions1[:, 0].min():.6f}, Max: {predictions1[:, 0].max():.6f}, Mean: {predictions1[:, 0].mean():.6f}")
+    print(f"Model2  - Min: {predictions2[:, 0].min():.6f}, Max: {predictions2[:, 0].max():.6f}, Mean: {predictions2[:, 0].mean():.6f}")
+
     print("\n=== Performance by Market Index ===")
     print("Market Index | Standard MSE (All) | Weighted MSE (All) | % Improvement | Standard MSE (Large) | Weighted MSE (Large) | % Improvement")
     print("-------------|-------------------|-------------------|--------------|---------------------|---------------------|-------------")
@@ -228,8 +246,8 @@ def create_comparison_plots(predictions1, predictions2, actuals, dates, market_i
         # Plot all data
         plt.subplot(2, 1, 1)
         plt.plot(dates, actual, 'k-', label='Actual', linewidth=1.5)
-        plt.plot(dates, pred1, 'b-', label=f'{model1_name} MSE', linewidth=1)
-        plt.plot(dates, pred2, 'r-', label=f'{model2_name} MSE', linewidth=1)
+        plt.plot(dates, pred1, 'b-', label=f'Standard MSE', linewidth=1)
+        plt.plot(dates, pred2, 'r-', label=f'{model2_name}', linewidth=1)
         plt.axhline(y=threshold, color='g', linestyle='--', label=f'Threshold ({threshold:.2f})')
         plt.title(f'Comparison for {market} - All Data')
         plt.legend()
@@ -244,8 +262,8 @@ def create_comparison_plots(predictions1, predictions2, actuals, dates, market_i
             large_jump_pred2 = pred2[large_jumps]
 
             plt.plot(large_jump_dates, large_jump_actual, 'ko-', label='Actual', linewidth=1.5)
-            plt.plot(large_jump_dates, large_jump_pred1, 'bo-', label=f'{model1_name} MSE', linewidth=1)
-            plt.plot(large_jump_dates, large_jump_pred2, 'ro-', label=f'{model2_name} MSE', linewidth=1)
+            plt.plot(large_jump_dates, large_jump_pred1, 'bo-', label=f'Standard MSE', linewidth=1)
+            plt.plot(large_jump_dates, large_jump_pred2, 'ro-', label=f'{model2_name}', linewidth=1)
             plt.axhline(y=threshold, color='g', linestyle='--', label=f'Threshold ({threshold:.2f})')
 
             # Calculate errors
@@ -253,7 +271,7 @@ def create_comparison_plots(predictions1, predictions2, actuals, dates, market_i
             mae2_large = np.mean(np.abs(large_jump_pred2 - large_jump_actual))
             improvement = 100 * (mae1_large - mae2_large) / mae1_large if mae1_large > 0 else 0
 
-            plt.title(f'Large Jumps Only - {model1_name} MAE: {mae1_large:.4f}, {model2_name} MAE: {mae2_large:.4f} ({improvement:+.2f}%)')
+            plt.title(f'Large Jumps Only - Standard MAE: {mae1_large:.4f}, {model2_name} MAE: {mae2_large:.4f} ({improvement:+.2f}%)')
         else:
             plt.text(0.5, 0.5, 'No large jumps found', horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes)
             plt.title('Large Jumps Only')
@@ -264,7 +282,7 @@ def create_comparison_plots(predictions1, predictions2, actuals, dates, market_i
         plt.tight_layout()
 
         # Save plot with loss function names in the filename
-        plot_path = f'plots/large_jump_comparison_{market}_{model1_name}_vs_{model2_name}_{timestamp}.png'
+        plot_path = f'plots/large_jump_comparison_{market}_standard_vs_{model2_name}_{timestamp}.png'
         plt.savefig(plot_path)
         plt.close()
 
@@ -306,8 +324,31 @@ def main():
     model2.eval()
 
     # Extract model names for better labeling
-    model1_name = args.model1.split('_')[-3] if len(args.model1.split('_')) > 3 else "standard"
-    model2_name = args.model2.split('_')[-3] if len(args.model2.split('_')) > 3 else "custom"
+    model1_parts = args.model1.split('_')
+    model2_parts = args.model2.split('_')
+
+    # Try to extract the loss function name from the model name
+    if "standard_mse" in args.model1:
+        model1_name = "Standard MSE"
+    elif "weighted_mse" in args.model1:
+        model1_name = "Weighted MSE"
+    elif "asymmetric_mse" in args.model1:
+        model1_name = "Asymmetric MSE"
+    elif "hybrid" in args.model1:
+        model1_name = "Hybrid Loss"
+    else:
+        model1_name = "Standard MSE"
+
+    if "standard_mse" in args.model2:
+        model2_name = "Standard MSE"
+    elif "weighted_mse" in args.model2:
+        model2_name = "Weighted MSE"
+    elif "asymmetric_mse" in args.model2:
+        model2_name = "Asymmetric MSE"
+    elif "hybrid" in args.model2:
+        model2_name = "Hybrid Loss"
+    else:
+        model2_name = "Custom Loss"
 
     # Evaluate models
     evaluate_models(model1, model2, dataset, args.threshold, args.use_percentile, args.percentile, model1_name, model2_name)
