@@ -111,6 +111,83 @@ def calculate_spillover_metrics(spillover_df):
     return metrics_df
 
 
+def calculate_pairwise_metrics(spillover_df):
+    """
+    Calculate pairwise spillover metrics between cryptocurrencies.
+
+    Args:
+        spillover_df (pd.DataFrame): DataFrame containing spillover data.
+
+    Returns:
+        pd.DataFrame: DataFrame with pairwise spillover metrics.
+    """
+    logger.info("Calculating pairwise spillover metrics")
+
+    symbols = spillover_df.index.tolist()
+    pairs = []
+
+    for i, symbol1 in enumerate(symbols):
+        for j, symbol2 in enumerate(symbols):
+            if i < j:  # Avoid duplicates and self-pairs
+                # Get spillover values in both directions
+                spillover_1_to_2 = spillover_df.loc[symbol1, symbol2]
+                spillover_2_to_1 = spillover_df.loc[symbol2, symbol1]
+
+                # Calculate metrics
+                bidirectional_sum = spillover_1_to_2 + spillover_2_to_1
+                bidirectional_product = spillover_1_to_2 * spillover_2_to_1
+                bidirectional_min = min(spillover_1_to_2, spillover_2_to_1)
+                bidirectional_max = max(spillover_1_to_2, spillover_2_to_1)
+                bidirectional_ratio = bidirectional_max / bidirectional_min if bidirectional_min > 0 else float('inf')
+                bidirectional_balance = 1 - abs(spillover_1_to_2 - spillover_2_to_1) / bidirectional_sum if bidirectional_sum > 0 else 0
+
+                # Add to pairs list
+                pairs.append({
+                    'symbol1': symbol1,
+                    'symbol2': symbol2,
+                    'spillover_1_to_2': spillover_1_to_2,
+                    'spillover_2_to_1': spillover_2_to_1,
+                    'bidirectional_sum': bidirectional_sum,
+                    'bidirectional_product': bidirectional_product,
+                    'bidirectional_min': bidirectional_min,
+                    'bidirectional_max': bidirectional_max,
+                    'bidirectional_ratio': bidirectional_ratio,
+                    'bidirectional_balance': bidirectional_balance
+                })
+
+    # Create DataFrame from pairs list
+    pairs_df = pd.DataFrame(pairs)
+
+    logger.info(f"Calculated pairwise metrics for {len(pairs_df)} cryptocurrency pairs")
+    return pairs_df
+
+
+def create_top_pairs(pairs_df, top_n=10, method='bidirectional_sum'):
+    """
+    Create a list of top cryptocurrency pairs based on pairwise metrics.
+
+    Args:
+        pairs_df (pd.DataFrame): DataFrame with pairwise spillover metrics.
+        top_n (int): Number of pairs to include.
+        method (str): Method to rank pairs.
+            Options: 'bidirectional_sum', 'bidirectional_product', 'bidirectional_min', 'bidirectional_balance'
+
+    Returns:
+        pd.DataFrame: DataFrame containing the top pairs.
+    """
+    logger.info(f"Creating top {top_n} pairs using method: {method}")
+
+    # Select the ranking method
+    if method not in ['bidirectional_sum', 'bidirectional_product', 'bidirectional_min', 'bidirectional_balance']:
+        raise ValueError("Unsupported method. Use 'bidirectional_sum', 'bidirectional_product', 'bidirectional_min', or 'bidirectional_balance'")
+
+    # Sort by the selected method and take the top N
+    top_pairs_df = pairs_df.sort_values(by=method, ascending=False).head(top_n).reset_index(drop=True)
+
+    logger.info(f"Created list of top {len(top_pairs_df)} cryptocurrency pairs")
+    return top_pairs_df
+
+
 def create_universe(metrics_df, top_n=20, method='to_others'):
     """
     Create a universe of cryptocurrencies based on spillover metrics.
@@ -175,6 +252,66 @@ def save_universe(universe_df, output_file, metadata=None):
     update_metadata(output_file, universe_df, metadata)
 
     logger.info(f"Saved universe to {output_file} and symbols to {symbols_file}")
+    return output_file
+
+
+def save_pairs(pairs_df, output_file, metadata=None):
+    """
+    Save the cryptocurrency pairs to a file and update metadata.
+
+    Args:
+        pairs_df (pd.DataFrame): DataFrame containing the pairs.
+        output_file (str): Path to save the pairs.
+        metadata (dict, optional): Additional metadata to save.
+
+    Returns:
+        str: Path to the saved pairs file.
+    """
+    logger.info(f"Saving pairs to {output_file}")
+
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
+    # Save the pairs
+    pairs_df.to_csv(output_file, index=False)
+
+    # Create a pairs-only text file
+    pairs_file = os.path.splitext(output_file)[0] + '_list.txt'
+    with open(pairs_file, 'w') as f:
+        for _, row in pairs_df.iterrows():
+            f.write(f"{row['symbol1']}-{row['symbol2']}\n")
+
+    # Update metadata
+    pairs_metadata = {
+        'file_path': output_file,
+        'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'num_pairs': len(pairs_df),
+        'pairs': [f"{row['symbol1']}-{row['symbol2']}" for _, row in pairs_df.iterrows()]
+    }
+
+    # Add additional metadata if provided
+    if metadata:
+        pairs_metadata.update(metadata)
+
+    # Save the metadata
+    metadata_file = DEFAULT_METADATA_FILE
+
+    # Load existing metadata if it exists
+    if os.path.exists(metadata_file):
+        with open(metadata_file, 'r') as f:
+            all_metadata = json.load(f)
+    else:
+        all_metadata = {}
+
+    # Update the metadata
+    universe_name = os.path.basename(output_file)
+    all_metadata[universe_name] = pairs_metadata
+
+    # Save the metadata
+    with open(metadata_file, 'w') as f:
+        json.dump(all_metadata, f, indent=2)
+
+    logger.info(f"Saved pairs to {output_file} and pairs list to {pairs_file}")
     return output_file
 
 
@@ -265,6 +402,20 @@ def main():
     create_parser.add_argument('--description', type=str, default=None,
                               help='Description of the universe.')
 
+    # Create pairs command
+    pairs_parser = subparsers.add_parser('pairs', help='Create a list of top cryptocurrency pairs')
+    pairs_parser.add_argument('--spillover-file', type=str, required=True,
+                             help='Path to the spillover data file.')
+    pairs_parser.add_argument('--output-file', type=str, default=None,
+                             help='Path to save the pairs. If not provided, a default name will be used.')
+    pairs_parser.add_argument('--top-n', type=int, default=10,
+                             help='Number of cryptocurrency pairs to include.')
+    pairs_parser.add_argument('--method', type=str, default='bidirectional_sum',
+                             choices=['bidirectional_sum', 'bidirectional_product', 'bidirectional_min', 'bidirectional_balance'],
+                             help='Method to rank cryptocurrency pairs.')
+    pairs_parser.add_argument('--description', type=str, default=None,
+                             help='Description of the pairs list.')
+
     # List universes command
     list_parser = subparsers.add_parser('list', help='List all available universes')
 
@@ -304,23 +455,68 @@ def main():
 
         logger.info(f"Universe creation completed successfully")
 
+    elif args.command == 'pairs':
+        # Load spillover data
+        spillover_df = load_spillover_data(args.spillover_file)
+
+        # Calculate pairwise metrics
+        pairs_df = calculate_pairwise_metrics(spillover_df)
+
+        # Create top pairs
+        top_pairs_df = create_top_pairs(pairs_df, top_n=args.top_n, method=args.method)
+
+        # Generate output file name if not provided
+        if args.output_file is None:
+            output_file = os.path.join(UNIVERSE_DIR, f"crypto_pairs_top{args.top_n}_{args.method}.csv")
+        else:
+            output_file = args.output_file
+
+        # Create metadata
+        metadata = {
+            'description': args.description or f"Top {args.top_n} cryptocurrency pairs by {args.method}",
+            'method': args.method,
+            'top_n': args.top_n,
+            'spillover_file': args.spillover_file
+        }
+
+        # Save pairs
+        save_pairs(top_pairs_df, output_file, metadata)
+
+        logger.info(f"Pairs creation completed successfully")
+
+        # Print the top pairs
+        print("\nTop Cryptocurrency Pairs:")
+        print("=" * 80)
+        for i, (_, row) in enumerate(top_pairs_df.iterrows()):
+            print(f"{i+1}. {row['symbol1']} ⟷ {row['symbol2']}")
+            print(f"   {row['symbol1']} → {row['symbol2']}: {row['spillover_1_to_2']:.4f}")
+            print(f"   {row['symbol2']} → {row['symbol1']}: {row['spillover_2_to_1']:.4f}")
+            print(f"   Sum: {row['bidirectional_sum']:.4f}, Product: {row['bidirectional_product']:.4f}")
+            print(f"   Balance: {row['bidirectional_balance']:.4f} (1.0 = perfectly balanced)")
+            print("-" * 80)
+
     elif args.command == 'list':
         # List universes
         universes = list_universes()
 
         if universes:
-            print("\nAvailable Cryptocurrency Universes:")
+            print("\nAvailable Cryptocurrency Universes and Pairs:")
             print("=" * 80)
             for name, metadata in universes.items():
                 print(f"Name: {name}")
                 print(f"  Path: {metadata['file_path']}")
                 print(f"  Created: {metadata['created_at']}")
-                print(f"  Symbols: {metadata['num_symbols']}")
+
+                if 'num_symbols' in metadata:
+                    print(f"  Symbols: {metadata['num_symbols']}")
+                elif 'num_pairs' in metadata:
+                    print(f"  Pairs: {metadata['num_pairs']}")
+
                 if 'description' in metadata:
                     print(f"  Description: {metadata['description']}")
                 print("-" * 80)
         else:
-            print("\nNo cryptocurrency universes found.")
+            print("\nNo cryptocurrency universes or pairs found.")
 
     else:
         parser.print_help()
