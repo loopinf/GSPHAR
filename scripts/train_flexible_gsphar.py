@@ -671,8 +671,26 @@ def main():
     if args.model_name:
         model_output_dir = os.path.join(args.output_dir, args.model_name)
     else:
-        # Extract model name from the saved model
-        model_output_dir = os.path.join(args.output_dir, model_name)
+        # Use the model name that was generated in train_model
+        model_name_parts = []
+
+        # Add lags
+        lags_str = '_'.join(str(lag) for lag in args.lags)
+        model_name_parts.append(f"lags{lags_str}")
+
+        # Add epochs
+        model_name_parts.append(f"epochs{args.n_epochs}")
+
+        # Add loss function
+        model_name_parts.append(f"{args.loss_function}")
+
+        # Add timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        model_name_parts.append(timestamp)
+
+        # Combine parts
+        output_name = f"flexible_gsphar_{'_'.join(model_name_parts)}"
+        model_output_dir = os.path.join(args.output_dir, output_name)
 
     # Ensure the output directory exists
     os.makedirs(model_output_dir, exist_ok=True)
@@ -705,7 +723,7 @@ def main():
     plt.axvline(x=best_epoch + 1, color='r', linestyle='--', label=f'Best Epoch ({best_epoch + 1})')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    plt.title(f'Training and Validation Losses\n{model_name}')
+    plt.title(f'Training and Validation Losses\nLags: {args.lags}, Loss: {args.loss_function}')
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
