@@ -258,9 +258,29 @@ def visualize_trading_strategy(dates, volatility, next_returns, filled_orders, h
     clipped_volatility = np.clip(volatility, 0.0, 0.99)
     entry_threshold_series = pd.Series(np.log(1 - clipped_volatility), index=dates)
 
-    # Calculate cumulative returns from the strategy
+    # Calculate returns from the strategy
+    # Only include returns when orders are filled
     strategy_returns = holding_return_series * filled_series
-    cumulative_strategy_returns = np.exp(strategy_returns.cumsum()) - 1
+
+    # Replace extreme values that might be causing issues
+    strategy_returns = strategy_returns.replace([np.inf, -np.inf], np.nan)
+
+    # For visualization purposes, we'll use a more robust approach to calculate cumulative returns
+    # Start with 1.0 (100%) and multiply by (1 + return) for each period
+    cumulative_multiplier = 1.0
+    cumulative_returns = []
+
+    # Iterate through the index and values
+    for idx, ret in zip(strategy_returns.index, strategy_returns.values):
+        if filled_series[idx] > 0:  # Only update when an order is filled
+            # Convert from log return to simple return if it's a log return
+            simple_return = np.exp(ret) - 1 if ret != 0 else 0
+            # Limit extreme returns that might be causing visualization issues
+            simple_return = np.clip(simple_return, -0.5, 2.0)
+            cumulative_multiplier *= (1 + simple_return)
+        cumulative_returns.append(cumulative_multiplier - 1)
+
+    cumulative_strategy_returns = pd.Series(cumulative_returns, index=strategy_returns.index)
 
     # Plot 1: Volatility predictions and next period returns
     plt.figure(figsize=(12, 6))
@@ -305,14 +325,143 @@ def visualize_trading_strategy(dates, volatility, next_returns, filled_orders, h
 
     # Plot 3: Cumulative strategy returns
     plt.figure(figsize=(12, 6))
-    plt.plot(cumulative_strategy_returns.index, cumulative_strategy_returns * 100, label='Cumulative Strategy Returns (%)', color='blue')
+
+    # Calculate trade count and win rate for the title
+    total_trades = int(filled_series.sum())
+    winning_trades = int((holding_return_series > 0)[filled_series > 0].sum())
+    win_rate = winning_trades / total_trades if total_trades > 0 else 0
+
+    # Plot the cumulative returns
+    plt.plot(cumulative_strategy_returns.index, cumulative_strategy_returns * 100,
+             label='Cumulative Strategy Returns (%)', color='blue')
+
+    # Add a horizontal line at 0%
+    plt.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+
+    # Add annotations for key metrics
+    final_return = cumulative_strategy_returns.iloc[-1] * 100
+    plt.annotate(f'Final Return: {final_return:.2f}%',
+                 xy=(0.02, 0.95), xycoords='axes fraction',
+                 bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+
+    plt.annotate(f'Total Trades: {total_trades} | Win Rate: {win_rate:.2%}',
+                 xy=(0.02, 0.89), xycoords='axes fraction',
+                 bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+
+    # Add markers for filled orders
+    filled_dates = filled_series[filled_series > 0].index
+    if len(filled_dates) > 0:
+        # Get the cumulative returns at those dates
+        filled_returns = cumulative_strategy_returns.loc[filled_dates] * 100
+        # Plot markers for filled orders, but limit to avoid overcrowding
+        if len(filled_dates) > 100:
+            # Sample every nth point to avoid overcrowding
+            n = len(filled_dates) // 100 + 1
+            plt.scatter(filled_dates[::n], filled_returns[::n],
+                       color='red', s=20, alpha=0.5, label='Trade Entry Points (sampled)')
+        else:
+            plt.scatter(filled_dates, filled_returns,
+                       color='red', s=20, alpha=0.5, label='Trade Entry Points')
+
     plt.title(f'Cumulative Strategy Returns for {symbol}')
     plt.xlabel('Date')
     plt.ylabel('Cumulative Return (%)')
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
+
+    # Save both PNG and HTML versions
     plt.savefig(output_dir / f"{symbol}_cumulative_returns.png", dpi=300)
+
+    # Create an interactive version with Plotly
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+
+        fig = go.Figure()
+
+        # Add the cumulative returns line
+        fig.add_trace(
+            go.Scatter(
+                x=cumulative_strategy_returns.index,
+                y=cumulative_strategy_returns * 100,
+                name='Cumulative Returns (%)',
+                line=dict(color='blue', width=2)
+            )
+        )
+
+        # Add markers for filled orders
+        if len(filled_dates) > 0:
+            # Sample if too many points
+            if len(filled_dates) > 500:
+                n = len(filled_dates) // 500 + 1
+                fig.add_trace(
+                    go.Scatter(
+                        x=filled_dates[::n],
+                        y=filled_returns[::n],
+                        mode='markers',
+                        name='Trade Entry Points (sampled)',
+                        marker=dict(color='red', size=6, opacity=0.5)
+                    )
+                )
+            else:
+                fig.add_trace(
+                    go.Scatter(
+                        x=filled_dates,
+                        y=filled_returns,
+                        mode='markers',
+                        name='Trade Entry Points',
+                        marker=dict(color='red', size=6, opacity=0.5)
+                    )
+                )
+
+        # Update layout
+        fig.update_layout(
+            title=f'Cumulative Strategy Returns for {symbol} (Interactive)',
+            xaxis_title='Date',
+            yaxis_title='Cumulative Return (%)',
+            hovermode='x unified',
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+
+        # Add a horizontal line at 0%
+        fig.add_hline(y=0, line=dict(color='black', width=1, dash='solid'), opacity=0.3)
+
+        # Add annotations
+        fig.add_annotation(
+            x=0.02,
+            y=0.98,
+            xref="paper",
+            yref="paper",
+            text=f"Final Return: {final_return:.2f}%",
+            showarrow=False,
+            bgcolor="white",
+            opacity=0.8,
+            bordercolor="gray",
+            borderwidth=1,
+            borderpad=4
+        )
+
+        fig.add_annotation(
+            x=0.02,
+            y=0.93,
+            xref="paper",
+            yref="paper",
+            text=f"Total Trades: {total_trades} | Win Rate: {win_rate:.2%}",
+            showarrow=False,
+            bgcolor="white",
+            opacity=0.8,
+            bordercolor="gray",
+            borderwidth=1,
+            borderpad=4
+        )
+
+        # Save as HTML
+        fig.write_html(output_dir / f"{symbol}_cumulative_returns.html")
+    except ImportError:
+        print("Plotly not installed. Skipping interactive plot creation.")
+    except Exception as e:
+        print(f"Error creating interactive plot: {e}")
 
     print(f"Visualizations saved to {output_dir}")
 
