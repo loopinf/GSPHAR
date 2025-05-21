@@ -108,7 +108,7 @@ def test_with_synthetic_data():
         print("No orders were filled")
 
 
-def test_with_real_data(crypto_data_file, symbol="BTCUSDT", start_date=None, end_date=None):
+def test_with_real_data(crypto_data_file, symbol="BTCUSDT", start_date=None, end_date=None, min_data_threshold=0.8):
     """
     Test the trading strategy loss function with real cryptocurrency data.
 
@@ -117,15 +117,49 @@ def test_with_real_data(crypto_data_file, symbol="BTCUSDT", start_date=None, end
         symbol (str): Symbol to use for testing
         start_date (str, optional): Start date for testing (YYYY-MM-DD)
         end_date (str, optional): End date for testing (YYYY-MM-DD)
+        min_data_threshold (float): Minimum fraction of non-NaN values required to include a date (0.0-1.0)
     """
     # Load the data
     df = pd.read_csv(crypto_data_file, index_col=0, parse_dates=True)
 
-    # Filter by date if specified
-    if start_date:
+    # Print initial data shape
+    print(f"Initial data shape: {df.shape}")
+
+    # Analyze data availability
+    data_availability = df.notna().sum(axis=1) / df.shape[1]
+    print(f"Data availability range: {data_availability.min():.2%} to {data_availability.max():.2%}")
+
+    # Find the date when data availability exceeds the threshold
+    if start_date is None:
+        dates_with_sufficient_data = data_availability[data_availability >= min_data_threshold].index
+        if len(dates_with_sufficient_data) > 0:
+            auto_start_date = dates_with_sufficient_data[0]
+            print(f"Automatically determined start date: {auto_start_date}")
+            df = df[df.index >= auto_start_date]
+        else:
+            print(f"Warning: No dates found with at least {min_data_threshold:.0%} data availability")
+    else:
         df = df[df.index >= start_date]
+
     if end_date:
         df = df[df.index <= end_date]
+
+    # Print filtered data shape
+    print(f"Filtered data shape: {df.shape}")
+
+    # Check if the selected symbol has data
+    if symbol not in df.columns:
+        print(f"Error: Symbol {symbol} not found in data")
+        return
+
+    # Check for missing values in the selected symbol
+    missing_values = df[symbol].isna().sum()
+    if missing_values > 0:
+        print(f"Warning: {missing_values} missing values found for {symbol} ({missing_values/len(df):.2%})")
+
+        # Fill missing values with forward fill, then backward fill
+        df[symbol] = df[symbol].fillna(method='ffill').fillna(method='bfill')
+        print(f"Missing values filled with forward/backward fill")
 
     # Get the percentage changes for the symbol
     pct_changes = df[symbol].values
@@ -141,7 +175,7 @@ def test_with_real_data(crypto_data_file, symbol="BTCUSDT", start_date=None, end
         sequences.append(log_returns[i:i+holding_period+1])
 
     # Convert to torch tensor
-    log_returns_tensor = torch.tensor(sequences, dtype=torch.float32)
+    log_returns_tensor = torch.tensor(np.array(sequences), dtype=torch.float32)
 
     # Generate some mock volatility predictions (in a real scenario, these would come from your model)
     # Here we'll use a simple rolling standard deviation of returns as a proxy
@@ -294,9 +328,19 @@ def main():
     # Update the path to your percentage change data file
     crypto_data_file = "data/crypto_pct_change_1h_38_20200101_20250116.csv"
 
+    # Set the minimum data threshold (percentage of non-NaN values required)
+    min_data_threshold = 0.8  # 80% of symbols must have data
+
     # Test with different cryptocurrencies
     for symbol in ["BTCUSDT", "ETHUSDT", "LTCUSDT"]:
-        test_with_real_data(crypto_data_file, symbol=symbol)
+        print(f"\n{'='*50}")
+        print(f"Testing with {symbol}")
+        print(f"{'='*50}")
+        test_with_real_data(
+            crypto_data_file,
+            symbol=symbol,
+            min_data_threshold=min_data_threshold
+        )
 
 
 if __name__ == "__main__":
