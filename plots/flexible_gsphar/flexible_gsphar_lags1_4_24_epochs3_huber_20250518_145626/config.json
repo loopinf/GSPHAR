@@ -1,0 +1,20 @@
+{
+  "lags": [
+    1,
+    4,
+    24
+  ],
+  "n_epochs": 3,
+  "loss_function": "huber",
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "batch_size": 32,
+  "train_ratio": 0.7,
+  "val_ratio": 0.15,
+  "test_ratio": 0.15,
+  "adjacency_method": "correlation",
+  "best_epoch": 3,
+  "final_train_loss": 0.23228568765577548,
+  "final_val_loss": 0.1927914076088542,
+  "best_val_loss": 0.1927914076088542
+}

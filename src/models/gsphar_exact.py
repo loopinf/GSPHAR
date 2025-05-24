@@ -29,16 +29,8 @@ class GSPHAR(nn.Module):
             nn.Linear(2 * 8, 1),
             nn.ReLU()
         )
-        # The input dimension for the linear layers is 3 (for lag1, lag5, lag22)
-        # not the input_dim parameter which is the sequence length
-        self.linear_output_real = nn.Linear(3, output_dim, bias=True)
-        self.linear_output_imag = nn.Linear(3, output_dim, bias=True)
-
-        print(f"GSPHAR model initialized with:")
-        print(f"  filter_size: {filter_size}")
-        print(f"  input_dim: {input_dim}")
-        print(f"  output_dim: {output_dim}")
-        print(f"  A shape: {A.shape}")
+        self.linear_output_real = nn.Linear(input_dim, output_dim, bias=True)
+        self.linear_output_imag = nn.Linear(input_dim, output_dim, bias=True)
 
     def nomalized_magnet_laplacian(self, A, q, norm=True):
         A_s = (A + A.T) / 2
@@ -196,6 +188,10 @@ class GSPHAR(nn.Module):
         x_lag22_conv_real = self.conv1d_lag22(x_lag22_spectral_real)
         x_lag22_conv_imag = self.conv1d_lag22(x_lag22_spectral_imag)
 
+        # Get the weights
+        softmax_param_5 = self.conv1d_lag5.weight
+        softmax_param_22 = self.conv1d_lag22.weight
+
         # Combine the real and imaginary parts
         x_lag5_conv = torch.complex(x_lag5_conv_real, x_lag5_conv_imag)
         x_lag22_conv = torch.complex(x_lag22_conv_real, x_lag22_conv_imag)
@@ -234,6 +230,4 @@ class GSPHAR(nn.Module):
         # Apply linear transformation separately to the real and imaginary parts
         y_hat = self.spatial_process(y_hat_spatial)
 
-        # Reshape to match the target shape [batch_size, filter_size, horizon]
-        y_hat = y_hat.view(y_hat.shape[0], y_hat.shape[1], 1)
-        return y_hat
+        return y_hat.squeeze(-1), softmax_param_5, softmax_param_22

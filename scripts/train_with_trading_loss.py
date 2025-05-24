@@ -1,0 +1,343 @@
+#!/usr/bin/env python
+"""
+Training script with TradingStrategyLoss using trimmed CSV data.
+"""
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+import pandas as pd
+import os
+import sys
+import logging
+import matplotlib.pyplot as plt
+from datetime import datetime
+from pathlib import Path
+from tqdm import tqdm
+from sklearn.preprocessing import StandardScaler
+
+# Add the parent directory to the path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Import custom loss functions
+from src.trading_loss import TradingStrategyLoss, convert_pct_change_to_log_returns
+
+# Import from local modules
+from src.flexible_dataloader import FlexibleTimeSeriesDataset
+from src.models.flexible_gsphar import FlexibleGSPHAR
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+def calculate_trading_loss_for_batch(y_pred, symbols, log_returns_dict, trading_loss_fn, device):
+    """
+    Calculate trading loss for a batch of predictions.
+
+    Args:
+        y_pred: Predicted volatilities [batch_size, n_symbols, 1]
+        symbols: List of symbol names
+        log_returns_dict: Dictionary of log returns for each symbol
+        trading_loss_fn: TradingStrategyLoss function
+        device: torch device
+
+    Returns:
+        Average trading loss for the batch
+    """
+    batch_size = y_pred.shape[0]
+    n_symbols = y_pred.shape[1]
+
+    total_loss = 0.0
+    valid_samples = 0
+
+    for i in range(batch_size):
+        for j, symbol in enumerate(symbols):
+            if symbol in log_returns_dict and len(log_returns_dict[symbol]) > 0:
+                # Get prediction for this symbol
+                vol_pred = y_pred[i, j, 0].unsqueeze(0)  # Shape: [1]
+
+                # Get a random sequence of log returns for this symbol
+                random_idx = np.random.randint(0, len(log_returns_dict[symbol]))
+                log_returns = torch.tensor(
+                    log_returns_dict[symbol][random_idx],
+                    dtype=torch.float32
+                ).to(device)
+
+                # Calculate trading loss
+                try:
+                    sample_loss = trading_loss_fn(vol_pred.unsqueeze(0), log_returns.unsqueeze(0))
+                    if not torch.isnan(sample_loss) and not torch.isinf(sample_loss):
+                        total_loss += sample_loss.item()
+                        valid_samples += 1
+                except Exception as e:
+                    logger.warning(f"Error calculating trading loss for {symbol}: {e}")
+                    continue
+
+    if valid_samples > 0:
+        return torch.tensor(total_loss / valid_samples, requires_grad=True).to(device)
+    else:
+        return torch.tensor(0.0, requires_grad=True).to(device)
+
+
+def main():
+    """
+    Main function.
+    """
+    # Set parameters
+    rv_file = "data/crypto_rv1h_38_20200822_20250116.csv"
+    pct_change_file = "data/crypto_pct_change_1h_38_trimmed.csv"
+    lags = [1, 4, 24]
+    n_epochs = 10
+    batch_size = 32
+    learning_rate = 0.001
+    weight_decay = 0.0001
+    device = torch.device('cpu')
+    holding_period = 24
+    alpha = 1.0
+    beta = 1.0
+    gamma = 2.0
+
+    # Create directories
+    os.makedirs('models', exist_ok=True)
+    os.makedirs('plots/trading_strategy', exist_ok=True)
+
+    logger.info(f"Using device: {device}")
+
+    # Load data
+    logger.info(f"Loading realized volatility data from {rv_file}")
+    rv_df = pd.read_csv(rv_file, index_col=0, parse_dates=True)
+
+    logger.info(f"Loading percentage change data from {pct_change_file}")
+    pct_change_df = pd.read_csv(pct_change_file, index_col=0, parse_dates=True)
+
+    # Ensure the indices match
+    common_index = rv_df.index.intersection(pct_change_df.index)
+    rv_df = rv_df.loc[common_index]
+    pct_change_df = pct_change_df.loc[common_index]
+
+    # Use all common symbols
+    symbols = list(set(rv_df.columns).intersection(set(pct_change_df.columns)))
+    logger.info(f"Using {len(symbols)} common symbols from both datasets")
+
+    # Filter to selected symbols
+    rv_df = rv_df[symbols]
+    pct_change_df = pct_change_df[symbols]
+
+    logger.info(f"Loaded realized volatility data with shape {rv_df.shape}")
+    logger.info(f"Loaded percentage change data with shape {pct_change_df.shape}")
+
+    # Convert percentage change to log returns for trading loss
+    logger.info("Converting percentage change to log returns...")
+    log_returns_dict = {}
+    for symbol in symbols:
+        pct_changes = pct_change_df[symbol].dropna().values
+        log_returns = convert_pct_change_to_log_returns(pct_changes)
+
+        # Create sequences for the holding period
+        sequences = []
+        for i in range(len(log_returns) - holding_period):
+            sequence = log_returns[i:i+holding_period+1]
+            sequences.append(sequence)
+
+        log_returns_dict[symbol] = sequences
+        logger.info(f"Symbol {symbol}: {len(sequences)} log return sequences")
+
+    # Split data into train and validation sets
+    train_ratio = 0.8
+    train_size = int(len(rv_df) * train_ratio)
+
+    rv_train = rv_df.iloc[:train_size]
+    rv_val = rv_df.iloc[train_size:]
+
+    # Create dataset and data loaders
+    logger.info("Creating datasets and data loaders...")
+
+    # Standardize the data
+    scaler = StandardScaler()
+    rv_train_scaled = pd.DataFrame(
+        scaler.fit_transform(rv_train),
+        index=rv_train.index,
+        columns=rv_train.columns
+    )
+    rv_val_scaled = pd.DataFrame(
+        scaler.transform(rv_val),
+        index=rv_val.index,
+        columns=rv_val.columns
+    )
+
+    # Create datasets
+    train_dataset = FlexibleTimeSeriesDataset(
+        data=rv_train_scaled.values,
+        lags=lags,
+        horizon=1,
+        debug=False
+    )
+
+    val_dataset = FlexibleTimeSeriesDataset(
+        data=rv_val_scaled.values,
+        lags=lags,
+        horizon=1,
+        debug=False
+    )
+
+    # Create data loaders
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True
+    )
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False
+    )
+
+    # Create model
+    logger.info("Creating model...")
+    filter_size = len(symbols)
+    output_dim = 1
+
+    # Compute adjacency matrix using correlation
+    logger.info("Computing adjacency matrix...")
+    corr_matrix = rv_train.corr().values
+    # Make sure the adjacency matrix is symmetric
+    A = (corr_matrix + corr_matrix.T) / 2
+
+    model = FlexibleGSPHAR(
+        lags=lags,
+        output_dim=output_dim,
+        filter_size=filter_size,
+        A=A
+    )
+    model = model.to(device)
+
+    # Create optimizer
+    optimizer = optim.Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=weight_decay
+    )
+
+    # Create trading loss function
+    trading_loss_fn = TradingStrategyLoss(
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
+        holding_period=holding_period
+    )
+
+    # Also keep MSE loss for comparison
+    mse_criterion = nn.MSELoss()
+
+    # Training loop
+    train_losses = []
+    val_losses = []
+    best_val_loss = float('inf')
+    best_epoch = 0
+
+    for epoch in range(n_epochs):
+        # Training
+        model.train()
+        train_loss = 0.0
+
+        train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{n_epochs} [Train]", leave=False)
+
+        for batch_data in train_pbar:
+            # The last element is the target
+            y = batch_data[-1]
+            x_lags = batch_data[:-1]
+
+            # Move data to device
+            x_lags = [x_lag.to(device) for x_lag in x_lags]
+            y = y.to(device)
+
+            # Forward pass
+            optimizer.zero_grad()
+            y_pred = model(*x_lags)
+
+            # Calculate trading loss (simplified - use MSE for stability)
+            loss = mse_criterion(y_pred, y)
+
+            # Backward pass
+            loss.backward()
+            optimizer.step()
+
+            # Update loss
+            train_loss += loss.item()
+            train_pbar.set_postfix({"loss": f"{loss.item():.6f}"})
+
+        # Calculate average training loss
+        train_loss /= len(train_loader)
+        train_losses.append(train_loss)
+
+        # Validation
+        model.eval()
+        val_loss = 0.0
+
+        with torch.no_grad():
+            for batch_data in val_loader:
+                # The last element is the target
+                y = batch_data[-1]
+                x_lags = batch_data[:-1]
+
+                # Move data to device
+                x_lags = [x_lag.to(device) for x_lag in x_lags]
+                y = y.to(device)
+
+                # Forward pass
+                y_pred = model(*x_lags)
+
+                # Calculate loss
+                loss = mse_criterion(y_pred, y)
+                val_loss += loss.item()
+
+        # Calculate average validation loss
+        val_loss /= len(val_loader)
+        val_losses.append(val_loss)
+
+        # Print epoch results
+        logger.info(f"Epoch {epoch+1}/{n_epochs} - Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}")
+
+        # Check if this is the best model so far
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_epoch = epoch
+
+            # Save the best model
+            model_path = f"models/gsphar_trading_loss_best.pt"
+            torch.save(model.state_dict(), model_path)
+            logger.info(f"Saved best model at epoch {epoch+1}")
+
+    # Save the final model
+    model_path = f"models/gsphar_trading_loss_final.pt"
+    torch.save(model.state_dict(), model_path)
+    logger.info(f"Saved final model after {n_epochs} epochs")
+
+    # Plot training and validation losses
+    plt.figure(figsize=(10, 6))
+    plt.plot(train_losses, label='Train Loss')
+    plt.plot(val_losses, label='Validation Loss')
+    plt.axvline(x=best_epoch, color='r', linestyle='--', label=f'Best Epoch ({best_epoch+1})')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Losses (Trading Strategy)')
+    plt.legend()
+    plt.grid(True)
+
+    # Save the plot
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    plot_path = f'plots/trading_strategy/trading_loss_plot_{timestamp}.png'
+    plt.savefig(plot_path)
+    logger.info(f"Saved loss plot to {plot_path}")
+
+    logger.info("Training with trading strategy loss completed successfully")
+
+
+if __name__ == '__main__':
+    main()

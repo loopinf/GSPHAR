@@ -1,0 +1,24 @@
+{
+    "model_name": "GSPHAR_24_magnet_dynamic_h5_best_val0.1873",
+    "validation_loss": 0.18729538621846586,
+    "timestamp": "2025-05-12 22:54:52",
+    "horizon": 5,
+    "filter_size": 24,
+    "epochs_trained": 2,
+    "resumed_from": "GSPHAR_24_magnet_dynamic_h1_latest_best",
+    "tag": null,
+    "train_loss_history": [
+        0.17945940228732857,
+        0.16456843449457273
+    ],
+    "test_loss_history": [
+        0.19222967140376568,
+        0.18729538621846586
+    ],
+    "learning_rate": 0.01,
+    "batch_size": 32,
+    "patience": 200,
+    "input_dim": 3,
+    "output_dim": 1,
+    "look_back": 22
+}

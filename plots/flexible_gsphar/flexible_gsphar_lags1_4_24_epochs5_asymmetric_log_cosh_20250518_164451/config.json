@@ -1,0 +1,20 @@
+{
+  "lags": [
+    1,
+    4,
+    24
+  ],
+  "n_epochs": 5,
+  "loss_function": "asymmetric_log_cosh",
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "batch_size": 32,
+  "train_ratio": 0.7,
+  "val_ratio": 0.15,
+  "test_ratio": 0.15,
+  "adjacency_method": "correlation",
+  "best_epoch": 5,
+  "final_train_loss": 0.26263095708608064,
+  "final_val_loss": 0.20930958522782142,
+  "best_val_loss": 0.20930958522782142
+}

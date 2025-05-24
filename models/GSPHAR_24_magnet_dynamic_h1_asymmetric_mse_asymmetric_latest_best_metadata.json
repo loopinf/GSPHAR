@@ -1,0 +1,36 @@
+{
+    "model_name": "GSPHAR_24_magnet_dynamic_h1_asymmetric_mse_asymmetric_best_val0.3522",
+    "validation_loss": 0.35223706951364875,
+    "timestamp": "2025-05-12 23:21:51",
+    "horizon": 1,
+    "filter_size": 24,
+    "epochs_trained": 3,
+    "resumed_from": null,
+    "tag": "asymmetric",
+    "train_loss_history": [
+        3.139373207092285,
+        1.3395011325677235,
+        0.4947468239068985
+    ],
+    "test_loss_history": [
+        1.681025062687695,
+        0.45014315005391836,
+        0.35223706951364875
+    ],
+    "learning_rate": 0.01,
+    "batch_size": 32,
+    "patience": 200,
+    "input_dim": 3,
+    "output_dim": 1,
+    "look_back": 22,
+    "loss_function": "asymmetric_mse",
+    "loss_function_params": {
+        "threshold": null,
+        "weight_factor": null,
+        "under_prediction_factor": 3.0,
+        "thresholds": null,
+        "weights": null,
+        "mse_weight": null,
+        "large_jump_weight": null
+    }
+}
