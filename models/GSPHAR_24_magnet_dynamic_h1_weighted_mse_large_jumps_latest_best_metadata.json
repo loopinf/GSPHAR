@@ -1,0 +1,36 @@
+{
+    "model_name": "GSPHAR_24_magnet_dynamic_h1_weighted_mse_large_jumps_best_val0.6622",
+    "validation_loss": 0.6621872340328991,
+    "timestamp": "2025-05-12 23:13:00",
+    "horizon": 1,
+    "filter_size": 24,
+    "epochs_trained": 3,
+    "resumed_from": null,
+    "tag": "large_jumps",
+    "train_loss_history": [
+        5.131059293746948,
+        2.2202678978443147,
+        0.9331280175844828
+    ],
+    "test_loss_history": [
+        2.7129374090582132,
+        0.7515440306160599,
+        0.6621872340328991
+    ],
+    "learning_rate": 0.01,
+    "batch_size": 32,
+    "patience": 200,
+    "input_dim": 3,
+    "output_dim": 1,
+    "look_back": 22,
+    "loss_function": "weighted_mse",
+    "loss_function_params": {
+        "threshold": 0.5,
+        "weight_factor": 5.0,
+        "under_prediction_factor": null,
+        "thresholds": null,
+        "weights": null,
+        "mse_weight": null,
+        "large_jump_weight": null
+    }
+}

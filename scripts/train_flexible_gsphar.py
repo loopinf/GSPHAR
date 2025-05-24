@@ -23,6 +23,9 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 # Add the parent directory to the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Import custom loss functions
+from src.losses import get_loss_function
+
 # Import from local modules
 from src.models.flexible_gsphar import FlexibleGSPHAR
 from src.utils import load_model, save_model
@@ -590,8 +593,11 @@ def main():
     parser.add_argument('--debug', action='store_true',
                         help='Whether to print debug information.')
     parser.add_argument('--loss-function', type=str, default='mse',
-                        choices=['mse', 'mae', 'huber', 'smooth_l1'],
+                        choices=['mse', 'mae', 'huber', 'smooth_l1', 'asymmetric_mse',
+                                'qlike', 'log_cosh', 'asymmetric_log_cosh', 'pinball'],
                         help='Loss function to use for training.')
+    parser.add_argument('--loss-param', type=float, default=None,
+                        help='Parameter for the loss function (e.g., alpha for asymmetric losses, delta for Huber).')
 
     args = parser.parse_args()
 
@@ -639,19 +645,26 @@ def main():
         weight_decay=args.weight_decay
     )
 
-    # Select loss function based on argument
-    if args.loss_function == 'mse':
-        criterion = nn.MSELoss()
-    elif args.loss_function == 'mae':
-        criterion = nn.L1Loss()
-    elif args.loss_function == 'huber':
-        criterion = nn.HuberLoss()
-    elif args.loss_function == 'smooth_l1':
-        criterion = nn.SmoothL1Loss()
-    else:
-        criterion = nn.MSELoss()
+    # Create loss function with parameters if provided
+    loss_kwargs = {}
+    if args.loss_param is not None:
+        if args.loss_function == 'huber' or args.loss_function == 'smooth_l1':
+            loss_kwargs['delta'] = args.loss_param
+        elif args.loss_function == 'asymmetric_mse' or args.loss_function == 'asymmetric_log_cosh':
+            loss_kwargs['alpha'] = args.loss_param
+        elif args.loss_function == 'pinball':
+            loss_kwargs['quantile'] = args.loss_param
+        elif args.loss_function == 'qlike':
+            loss_kwargs['epsilon'] = args.loss_param
 
-    logger.info(f"Using loss function: {criterion.__class__.__name__}")
+    # Get the loss function
+    criterion = get_loss_function(args.loss_function, **loss_kwargs)
+
+    # Log the loss function details
+    if args.loss_param is not None:
+        logger.info(f"Using loss function: {criterion.__class__.__name__} with parameter: {args.loss_param}")
+    else:
+        logger.info(f"Using loss function: {criterion.__class__.__name__}")
 
     # Train model
     model, train_losses, val_losses, best_epoch = train_model(

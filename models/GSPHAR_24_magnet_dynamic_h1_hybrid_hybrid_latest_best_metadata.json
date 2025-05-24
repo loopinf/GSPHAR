@@ -1,0 +1,36 @@
+{
+    "model_name": "GSPHAR_24_magnet_dynamic_h1_hybrid_hybrid_best_val1.6879",
+    "validation_loss": 1.687941063195467,
+    "timestamp": "2025-05-12 23:23:38",
+    "horizon": 1,
+    "filter_size": 24,
+    "epochs_trained": 3,
+    "resumed_from": null,
+    "tag": "hybrid",
+    "train_loss_history": [
+        13.215072034200032,
+        5.709040104548136,
+        2.411989680926005
+    ],
+    "test_loss_history": [
+        7.184224829077721,
+        1.8511093449778855,
+        1.687941063195467
+    ],
+    "learning_rate": 0.01,
+    "batch_size": 32,
+    "patience": 200,
+    "input_dim": 3,
+    "output_dim": 1,
+    "look_back": 22,
+    "loss_function": "hybrid",
+    "loss_function_params": {
+        "threshold": 0.5,
+        "weight_factor": 5.0,
+        "under_prediction_factor": null,
+        "thresholds": null,
+        "weights": null,
+        "mse_weight": 1.0,
+        "large_jump_weight": 2.0
+    }
+}

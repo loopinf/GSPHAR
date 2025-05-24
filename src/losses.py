@@ -19,7 +19,7 @@ class AsymmetricMSELoss(nn.Module):
                       underpredictions more heavily. Default: 1.5
     """
     def __init__(self, alpha=1.5):
-        super(AsymmetricMSELoss, self).__init__()
+        super().__init__()
         self.alpha = alpha
 
     def forward(self, pred, target):
@@ -64,7 +64,7 @@ class QLIKELoss(nn.Module):
     numerical stability, as our target values can be very small.
     """
     def __init__(self, epsilon=1e-6):
-        super(QLIKELoss, self).__init__()
+        super().__init__()
         self.epsilon = epsilon
 
     def forward(self, pred, target):
@@ -104,7 +104,7 @@ class LogCoshLoss(nn.Module):
     log(cosh(x)) ≈ |x| - log(2) for large x
     """
     def __init__(self):
-        super(LogCoshLoss, self).__init__()
+        super().__init__()
 
     def forward(self, pred, target):
         """

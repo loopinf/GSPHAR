@@ -1,0 +1,50 @@
+{
+    "model_name": "GSPHAR_24_magnet_dynamic_h1_standard_mse_10epochs_best_val0.1193",
+    "validation_loss": 0.11930807534372434,
+    "timestamp": "2025-05-12 23:42:50",
+    "horizon": 1,
+    "filter_size": 24,
+    "epochs_trained": 10,
+    "resumed_from": null,
+    "tag": "standard_mse_10epochs",
+    "train_loss_history": [
+        1.0464580965042114,
+        0.45095988929271696,
+        0.20546997884909313,
+        0.133797225356102,
+        0.12158337752024333,
+        0.1173002208272616,
+        0.1135925979912281,
+        0.11095016787449519,
+        0.10968164756894111,
+        0.10945005630453428
+    ],
+    "test_loss_history": [
+        0.5603456264361739,
+        0.1659513176418841,
+        0.16027705953456461,
+        0.138560947496444,
+        0.1295271673006937,
+        0.12462122575379908,
+        0.12232957454398274,
+        0.12090577837079763,
+        0.11943764623720199,
+        0.11930807534372434
+    ],
+    "learning_rate": 0.01,
+    "batch_size": 32,
+    "patience": 200,
+    "input_dim": 3,
+    "output_dim": 1,
+    "look_back": 22,
+    "loss_function": "mse",
+    "loss_function_params": {
+        "threshold": null,
+        "weight_factor": null,
+        "under_prediction_factor": null,
+        "thresholds": null,
+        "weights": null,
+        "mse_weight": null,
+        "large_jump_weight": null
+    }
+}
