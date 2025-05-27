@@ -7,3 +7,4 @@ statsmodels
 tqdm
 torchview
 pyarrow
+arch>=5.0.0  # For GARCH volatility modeling
