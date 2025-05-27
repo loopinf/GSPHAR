@@ -88,16 +88,40 @@ This repository contains the development of a GSPHAR-based cryptocurrency tradin
 - Statistical validation and performance metrics
 - Risk management and position sizing utilities
 
-## Project Structure
+## 📁 Project Organization (Updated May 28, 2025)
+
+**✅ Recently Reorganized**: Project structure has been completely reorganized for better maintainability and clarity.
+
+### **Core Directories**:
 
 ```bash
 GSPHAR/
+├── 📁 scripts/             # Organized by functionality (85+ scripts)
+│   ├── core/              # Essential scripts (train, inference, evaluate)
+│   ├── training/          # All training scripts and pipelines
+│   ├── analysis/          # Analysis and comparison scripts  
+│   ├── trading/           # Trading strategies and simulations
+│   ├── data_processing/   # Data preprocessing and utilities
+│   ├── visualization/     # Plotting and visualization scripts
+│   ├── debugging/         # Debug and diagnostic scripts
+│   ├── utilities/         # Helper utilities and tools
+│   └── archive/           # Deprecated/experimental scripts
+│
+├── 📁 models/             # Organized model storage (140+ models → 20 active)
+│   ├── active/            # Current best models only
+│   ├── experiments/       # Organized by experiment type
+│   │   ├── loss_functions/
+│   │   ├── two_stage/
+│   │   ├── flexible_gsphar/
+│   │   └── crypto_specific/
+│   └── archive/           # Date-based archiving
+│
+├── 📁 plots/              # Organized visualization outputs (500+ → 100 current)
+│   ├── current/           # Latest/best results only
+│   ├── analysis_reports/  # Categorized analysis plots
+│   └── archive/           # Historical plots by date
+│
 ├── benchmarks/             # Performance benchmark scripts
-│   ├── benchmark_devices.py
-│   ├── benchmark_inference.py
-│   ├── benchmark_tensor_ops.py
-│   ├── simple_mps_test.py
-│   └── test_gsphar_mps.py
 ├── bin/                    # Executable scripts
 │   ├── benchmark_all.sh    # Run all benchmarks
 │   ├── commit_changes.sh   # Commit changes to git
