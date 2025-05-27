@@ -9,7 +9,7 @@ and data loaders for the GSPHAR trading strategy.
 from .experiment_config import (
     ModelType, LossType, TrainingApproach, DataLoaderType,
     ModelConfig, LossConfig, TrainingConfig, DataConfig, ExperimentConfig,
-    get_predefined_config, create_custom_config
+    load_config, create_custom_config
 )
 
 from .component_factory import (
@@ -32,17 +32,17 @@ __all__ = [
     # Configuration
     'ModelType', 'LossType', 'TrainingApproach', 'DataLoaderType',
     'ModelConfig', 'LossConfig', 'TrainingConfig', 'DataConfig', 'ExperimentConfig',
-    'get_predefined_config', 'create_custom_config',
-    
+    'load_config', 'create_custom_config',
+
     # Factories
     'ModelFactory', 'LossFactory', 'OptimizerFactory', 'DataLoaderFactory',
     'TrainingStrategyFactory', 'create_all_components',
-    
+
     # Training Strategies
     'BaseTrainingStrategy', 'SingleStageStrategy', 'TwoStageStrategy',
     'ProfitMaximizationStrategy', 'OHLCVBasedStrategy', 'GARCHPipelineStrategy',
     'TrainingResult',
-    
+
     # Main Pipeline
     'FlexibleTrainingPipeline', 'ExperimentTracker',
     'run_quick_experiment', 'run_comparison_study'
