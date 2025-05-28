@@ -15,8 +15,9 @@ import sys
 from tqdm import tqdm
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-# Add the parent directory to the path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Add the project root directory to the path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, project_root)
 
 # Import from local modules
 from config import settings
