@@ -116,10 +116,13 @@ GSPHAR/
 │   │   └── crypto_specific/
 │   └── archive/           # Date-based archiving
 │
-├── 📁 plots/              # Organized visualization outputs (500+ → 100 current)
-│   ├── current/           # Latest/best results only
-│   ├── analysis_reports/  # Categorized analysis plots
-│   └── archive/           # Historical plots by date
+├── 📁 plots/              # Streamlined visualizations (163MB, cleaned 2025-05-28)
+│   ├── current/           # 4 essential summary plots (2.2MB)
+│   ├── active_models/     # Current development plots (106MB)
+│   │   ├── current_comparisons/  # Latest model comparisons (41MB)
+│   │   ├── recent_trading/       # Trading analysis (24MB)
+│   │   └── key_loss_analysis/    # Loss optimization (42MB)
+│   └── archive/           # Minimal key milestones (53MB)
 │
 ├── benchmarks/             # Performance benchmark scripts
 ├── bin/                    # Executable scripts
